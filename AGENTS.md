@@ -30,7 +30,7 @@ C11 ncurses text editor. Single binary, no test framework, no CI.
 - Highlight: C files only (`.c`/`.h`), default-background palette, per-line cache + full rescan on dirty flag.
 - Mouse: click-to-move + wheel scroll (±3 rows); silent-off fallback when terminal lacks support.
 - Select: `sel_active`/`sel_ax`/`sel_ay` anchor in `Editor`, active end is `cx`/`cy`, end-exclusive; Backspace/Del delete the range (multi-line joins head+tail, never drops below 1 line), typing/`Enter` replace it, `Tab` block-indents touched lines (`ex==0` excludes the last line) and keeps the selection shifted; plain moves, mouse clicks, and completion-accept only clear. Both plain and color draw paths split runs with `A_REVERSE`.
-- Keys: ncurses has **no** `KEY_SUP`/`KEY_SDOWN` — Shift+Up/Down arrive via `kri`/`kind` as `KEY_SR`/`KEY_SF`; Shift+arrows/Home/End are `KEY_SLEFT`/`SRIGHT`/`SHOME`/`SSEND`, Shift+PgUp/PgDn are `KEY_SPREVIOUS`/`KEY_SNEXT`.
+- Keys: ncurses has **no** `KEY_SUP`/`KEY_SDOWN` — Shift+Up/Down arrive via `kri`/`kind` as `KEY_SR`/`KEY_SF`; Shift+arrows/Home/End are `KEY_SLEFT`/`SRIGHT`/`SHOME`/`SSEND`, Shift+PgUp/PgDn are `KEY_SPREVIOUS`/`KEY_SNEXT`. Shift+Tab is `KEY_BTAB` → unindent (block over selection, else current line); there is deliberately **no** Ctrl+Tab binding (no standard encoding — plain xterm sends bare `0x09`).
 - Page: `KEY_PPAGE`/`KEY_NPAGE` move exactly `LINES-2` rows, clamped to `editor_max_cy()`, `row_off` follows via `editor_scroll()`.
 
 ## Verification (headless pty, no fixtures)

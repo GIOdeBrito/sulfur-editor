@@ -216,6 +216,12 @@ int editor_handle_key(int key)
 		return 0;
 	}
 
+	if(key == KEY_BTAB)
+	{
+		editor_unindent();
+		return 0;
+	}
+
 	if(key == KEY_BACKSPACE || key == 127 || key == CTRL_KEY('h'))
 	{
 		editor_delete_backspace();

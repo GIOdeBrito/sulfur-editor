@@ -14,5 +14,6 @@ void editor_line_home(int extend);
 void editor_line_end(int extend);
 int editor_delete_selection(void);
 int editor_indent_selection(void);
+void editor_unindent(void);
 
 #endif

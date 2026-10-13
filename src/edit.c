@@ -161,6 +161,139 @@ int editor_indent_selection(void)
 	return 1;
 }
 
+static size_t editor_strip_leading(Line *line, size_t want)
+{
+	size_t n;
+
+	if(line == NULL || line->data == NULL)
+	{
+		return 0;
+	}
+
+	n = 0;
+
+	while(n < want && n < line->len && line->data[n] == ' ')
+	{
+		n++;
+	}
+
+	if(n == 0)
+	{
+		return 0;
+	}
+
+	memmove(line->data, &line->data[n], line->len - n + 1);
+	line->len -= n;
+	return n;
+}
+
+void editor_unindent(void)
+{
+	if(g_editor.sel_active != 0)
+	{
+		size_t sy;
+		size_t sx;
+		size_t ey;
+		size_t ex;
+		size_t last;
+		size_t row;
+
+		editor_selection_range(&sy, &sx, &ey, &ex);
+
+		if(g_editor.num_lines != 0 && sy < g_editor.num_lines && (sy != ey || sx != ex))
+		{
+			if(ey >= g_editor.num_lines)
+			{
+				ey = g_editor.num_lines - 1;
+			}
+
+			last = ey;
+
+			if(ex == 0 && ey > sy)
+			{
+				last = ey - 1;
+			}
+
+			for(row = sy; row <= last; row++)
+			{
+				size_t stripped;
+
+				stripped = editor_strip_leading(&g_editor.lines[row], (size_t)TAB_WIDTH);
+
+				if(stripped == 0)
+				{
+					continue;
+				}
+
+				if(g_editor.sel_ay == row)
+				{
+					if(g_editor.sel_ax >= stripped)
+					{
+						g_editor.sel_ax -= stripped;
+					}
+					else
+					{
+						g_editor.sel_ax = 0;
+					}
+				}
+
+				if(g_editor.cy == row)
+				{
+					if(g_editor.cx >= stripped)
+					{
+						g_editor.cx -= stripped;
+					}
+					else
+					{
+						g_editor.cx = 0;
+					}
+
+					g_editor.want_cx = g_editor.cx;
+				}
+			}
+
+			(void)sx;
+			g_editor.dirty = 1;
+			highlight_mark_dirty();
+			return;
+		}
+
+		editor_select_clear();
+	}
+
+	{
+		Line *line;
+		size_t stripped;
+
+		line = editor_current_line();
+
+		if(line == NULL)
+		{
+			return;
+		}
+
+		stripped = editor_strip_leading(line, (size_t)TAB_WIDTH);
+
+		if(stripped == 0)
+		{
+			return;
+		}
+
+		if(g_editor.cx >= stripped)
+		{
+			g_editor.cx -= stripped;
+		}
+		else
+		{
+			g_editor.cx = 0;
+		}
+
+		g_editor.want_cx = g_editor.cx;
+		g_editor.dirty = 1;
+		highlight_mark_dirty();
+	}
+}
+
 void editor_insert_char(char c)
 {
 	Line *line;
