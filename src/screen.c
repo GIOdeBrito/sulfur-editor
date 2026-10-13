@@ -3,6 +3,7 @@
 #include <unistd.h>
 
 #include "highlight.h"
+#include "mouse.h"
 #include "screen.h"
 
 void editor_disable_flow_control(void)
@@ -31,4 +32,5 @@ void editor_start_screen(void)
 	set_escdelay(25);
 	editor_disable_flow_control();
 	highlight_init_color();
+	mouse_init();
 }

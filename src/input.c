@@ -7,6 +7,7 @@
 #include "edit.h"
 #include "editor.h"
 #include "input.h"
+#include "mouse.h"
 #include "view.h"
 
 int editor_prompt_filename(void)
@@ -92,6 +93,12 @@ int editor_handle_key(int key)
 		}
 
 		complete_reset();
+	}
+
+	if(key == KEY_MOUSE)
+	{
+		mouse_handle();
+		return 0;
 	}
 
 	if(key == CTRL_KEY('q') || key == CTRL_KEY('x'))
