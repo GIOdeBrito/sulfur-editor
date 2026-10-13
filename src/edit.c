@@ -9,12 +9,169 @@
 #include "line.h"
 #include "view.h"
 
+int editor_delete_selection(void)
+{
+	size_t sy;
+	size_t sx;
+	size_t ey;
+	size_t ex;
+	Line *first;
+	Line *last;
+	size_t tail_len;
+	size_t i;
+
+	if(g_editor.sel_active == 0)
+	{
+		return 0;
+	}
+
+	editor_selection_range(&sy, &sx, &ey, &ex);
+
+	if(g_editor.num_lines == 0 || sy >= g_editor.num_lines)
+	{
+		editor_select_clear();
+		return 0;
+	}
+
+	if(ey >= g_editor.num_lines)
+	{
+		ey = g_editor.num_lines - 1;
+		ex = g_editor.lines[ey].len;
+	}
+
+	if(sx > g_editor.lines[sy].len)
+	{
+		sx = g_editor.lines[sy].len;
+	}
+
+	if(ex > g_editor.lines[ey].len)
+	{
+		ex = g_editor.lines[ey].len;
+	}
+
+	if(sy == ey && sx == ex)
+	{
+		editor_select_clear();
+		return 0;
+	}
+
+	if(sy == ey)
+	{
+		first = &g_editor.lines[sy];
+		memmove(&first->data[sx], &first->data[ex], first->len - ex + 1);
+		first->len -= ex - sx;
+	}
+	else
+	{
+		first = &g_editor.lines[sy];
+		last = &g_editor.lines[ey];
+		tail_len = last->len - ex;
+		line_ensure_cap(first, sx + tail_len + 1);
+		memcpy(&first->data[sx], &last->data[ex], tail_len);
+		first->len = sx + tail_len;
+		first->data[first->len] = '\0';
+
+		for(i = sy + 1; i <= ey; i++)
+		{
+			line_free(&g_editor.lines[i]);
+		}
+
+		memmove(&g_editor.lines[sy + 1], &g_editor.lines[ey + 1], sizeof(Line) * (g_editor.num_lines - ey - 1));
+		g_editor.num_lines -= ey - sy;
+	}
+
+	g_editor.cy = sy;
+	g_editor.cx = sx;
+	g_editor.want_cx = sx;
+	g_editor.dirty = 1;
+	editor_select_clear();
+	highlight_mark_dirty();
+	return 1;
+}
+
+int editor_indent_selection(void)
+{
+	size_t sy;
+	size_t sx;
+	size_t ey;
+	size_t ex;
+	size_t last;
+	size_t row;
+
+	if(g_editor.sel_active == 0)
+	{
+		return 0;
+	}
+
+	editor_selection_range(&sy, &sx, &ey, &ex);
+
+	if(g_editor.num_lines == 0 || sy >= g_editor.num_lines)
+	{
+		return 0;
+	}
+
+	if(sy == ey && sx == ex)
+	{
+		return 0;
+	}
+
+	if(ey >= g_editor.num_lines)
+	{
+		ey = g_editor.num_lines - 1;
+	}
+
+	last = ey;
+
+	if(ex == 0 && ey > sy)
+	{
+		last = ey - 1;
+	}
+
+	(void)sx;
+
+	for(row = sy; row <= last; row++)
+	{
+		Line *line;
+		int k;
+
+		line = &g_editor.lines[row];
+		line_ensure_cap(line, line->len + (size_t)TAB_WIDTH + 1);
+		memmove(&line->data[TAB_WIDTH], line->data, line->len + 1);
+		line->len += (size_t)TAB_WIDTH;
+
+		for(k = 0; k < TAB_WIDTH; k++)
+		{
+			line->data[k] = ' ';
+		}
+
+		if(g_editor.sel_ay == row)
+		{
+			g_editor.sel_ax += (size_t)TAB_WIDTH;
+		}
+
+		if(g_editor.cy == row)
+		{
+			g_editor.cx += (size_t)TAB_WIDTH;
+			g_editor.want_cx = g_editor.cx;
+		}
+	}
+
+	g_editor.dirty = 1;
+	highlight_mark_dirty();
+	return 1;
+}
+
 void editor_insert_char(char c)
 {
 	Line *line;
 	int i;
 
-	editor_select_clear();
+	if(c == '\t' && editor_indent_selection() != 0)
+	{
+		return;
+	}
+
+	editor_delete_selection();
 	line = editor_current_line();
 
 	if(line == NULL)
@@ -48,7 +205,7 @@ void editor_insert_newline(void)
 	Line *line;
 	size_t tail_len;
 
-	editor_select_clear();
+	editor_delete_selection();
 	line = editor_current_line();
 
 	if(line == NULL)
@@ -86,7 +243,11 @@ void editor_delete_backspace(void)
 	Line *prev;
 	size_t prev_len;
 
-	editor_select_clear();
+	if(editor_delete_selection() != 0)
+	{
+		return;
+	}
+
 	line = editor_current_line();
 
 	if(line == NULL)
@@ -130,7 +291,11 @@ void editor_delete_char(void)
 	Line *line;
 	Line *next;
 
-	editor_select_clear();
+	if(editor_delete_selection() != 0)
+	{
+		return;
+	}
+
 	line = editor_current_line();
 
 	if(line == NULL)

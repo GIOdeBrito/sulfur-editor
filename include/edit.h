@@ -12,5 +12,7 @@ void editor_move_down(int extend);
 void editor_move_page(int direction, int extend);
 void editor_line_home(int extend);
 void editor_line_end(int extend);
+int editor_delete_selection(void);
+int editor_indent_selection(void);
 
 #endif

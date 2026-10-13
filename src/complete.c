@@ -275,6 +275,7 @@ void complete_accept(void)
 		s_complete.selected = 0;
 	}
 
+	editor_select_clear();
 	line = editor_current_line();
 
 	if(line == NULL || line->data == NULL)
