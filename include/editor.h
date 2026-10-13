@@ -2,6 +2,7 @@
 #define EDITOR_H
 
 #include "common.h"
+#include "highlight.h"
 #include "line.h"
 
 typedef enum
@@ -26,6 +27,7 @@ typedef struct
 	char status[STATUS_LIMIT];
 	EolKind eol;
 	int trailing_nl;
+	HlFiletype filetype;
 } Editor;
 
 extern Editor g_editor;

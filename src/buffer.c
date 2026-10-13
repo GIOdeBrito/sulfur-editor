@@ -5,6 +5,7 @@
 #include "buffer.h"
 #include "common.h"
 #include "editor.h"
+#include "highlight.h"
 #include "line.h"
 #include "util.h"
 
@@ -140,10 +141,13 @@ void editor_open(const char *filename)
 		g_editor.eol = EOL_LF;
 		g_editor.trailing_nl = 0;
 		editor_append_line("", 0);
+		highlight_set_filetype();
+		highlight_mark_dirty();
 		return;
 	}
 
 	snprintf(g_editor.filename, sizeof(g_editor.filename), "%s", filename);
+	highlight_set_filetype();
 	fp = fopen(filename, "r");
 
 	if(fp == NULL)
@@ -151,6 +155,7 @@ void editor_open(const char *filename)
 		g_editor.eol = EOL_LF;
 		g_editor.trailing_nl = 0;
 		editor_append_line("", 0);
+		highlight_mark_dirty();
 		editor_set_status("New file");
 		return;
 	}
@@ -223,6 +228,7 @@ void editor_open(const char *filename)
 	}
 
 	g_editor.dirty = 0;
+	highlight_mark_dirty();
 	editor_set_status("File loaded");
 }
 

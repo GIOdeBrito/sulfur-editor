@@ -5,6 +5,7 @@
 #include "buffer.h"
 #include "common.h"
 #include "editor.h"
+#include "highlight.h"
 #include "view.h"
 
 int editor_gutter_width(void)
@@ -48,9 +49,62 @@ int editor_view_cols(void)
 	return cols;
 }
 
-void editor_scroll(void)
+static void editor_draw_colored_line(int y, int text_x, Line *line, size_t file_row, int view_cols)
 {
-	int view_rows;
+	const unsigned char *cls;
+	size_t start;
+	size_t end;
+	size_t i;
+	int col;
+
+	if(line == NULL || line->data == NULL || line->len == 0)
+	{
+		return;
+	}
+
+	cls = highlight_classes(file_row);
+
+	if(cls == NULL)
+	{
+		return;
+	}
+
+	start = g_editor.col_off;
+	end = start + (size_t)view_cols;
+
+	if(end > line->len)
+	{
+		end = line->len;
+	}
+
+	i = start;
+	col = text_x;
+
+	while(i < end)
+	{
+		unsigned char c;
+		size_t j;
+		int attr;
+
+		c = cls[i];
+		j = i + 1;
+
+		while(j < end && cls[j] == c)
+		{
+			j++;
+		}
+
+		attr = highlight_attr((HlClass)c);
+		attron(attr);
+		mvaddnstr(y, col, &line->data[i], (int)(j - i));
+		attroff(attr);
+		col += (int)(j - i);
+		i = j;
+	}
+}
+
+void editor_scroll(void)
+{	int view_rows;
 	int view_cols;
 
 	view_rows = LINES - 2;
@@ -94,6 +148,7 @@ void editor_draw_lines(void)
 	view_cols = editor_view_cols();
 	gutter = editor_gutter_width();
 	text_x = gutter + 1;
+	highlight_ensure();
 
 	for(y = 0; y < view_rows; y++)
 	{
@@ -143,6 +198,12 @@ void editor_draw_lines(void)
 
 		line = &g_editor.lines[file_row];
 
+		if(g_editor.filetype == HL_C && highlight_use_color())
+		{
+			editor_draw_colored_line(y, text_x, line, file_row, view_cols);
+			continue;
+		}
+
 		if(g_editor.col_off >= line->len)
 		{
 			continue;
@@ -187,7 +248,7 @@ void editor_draw_status(void)
 		snprintf(left, sizeof(left), "%s%s", g_editor.filename, g_editor.dirty ? " *" : "");
 	}
 
-	snprintf(right, sizeof(right), "%s %zu/%zu  Ctrl-S save | Ctrl-Q/X quit", editor_eol_name(), g_editor.cy + 1, g_editor.num_lines);
+	snprintf(right, sizeof(right), "%s %s %zu/%zu  Ctrl-S save | Ctrl-Q/X quit", editor_eol_name(), g_editor.filetype == HL_C ? "C" : "-", g_editor.cy + 1, g_editor.num_lines);
 	attron(A_REVERSE);
 	move(status_row, 0);
 	clrtoeol();

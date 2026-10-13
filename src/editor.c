@@ -4,6 +4,7 @@
 
 #include "complete.h"
 #include "editor.h"
+#include "highlight.h"
 #include "line.h"
 #include "util.h"
 
@@ -31,6 +32,7 @@ void editor_init(void)
 	g_editor.status[0] = '\0';
 	g_editor.eol = EOL_LF;
 	g_editor.trailing_nl = 0;
+	g_editor.filetype = HL_PLAIN;
 	complete_reset();
 }
 
@@ -47,6 +49,7 @@ void editor_free(void)
 	g_editor.lines = NULL;
 	g_editor.num_lines = 0;
 	g_editor.line_cap = 0;
+	highlight_free();
 }
 
 void editor_set_status(const char *msg)

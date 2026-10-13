@@ -2,6 +2,7 @@
 #include <termios.h>
 #include <unistd.h>
 
+#include "highlight.h"
 #include "screen.h"
 
 void editor_disable_flow_control(void)
@@ -29,4 +30,5 @@ void editor_start_screen(void)
 	intrflush(stdscr, FALSE);
 	set_escdelay(25);
 	editor_disable_flow_control();
+	highlight_init_color();
 }

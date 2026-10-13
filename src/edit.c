@@ -4,6 +4,7 @@
 #include "common.h"
 #include "edit.h"
 #include "editor.h"
+#include "highlight.h"
 #include "line.h"
 
 void editor_insert_char(char c)
@@ -28,6 +29,7 @@ void editor_insert_char(char c)
 
 		g_editor.dirty = 1;
 		g_editor.want_cx = g_editor.cx;
+		highlight_mark_dirty();
 		return;
 	}
 
@@ -35,6 +37,7 @@ void editor_insert_char(char c)
 	g_editor.cx++;
 	g_editor.dirty = 1;
 	g_editor.want_cx = g_editor.cx;
+	highlight_mark_dirty();
 }
 
 void editor_insert_newline(void)
@@ -70,6 +73,7 @@ void editor_insert_newline(void)
 	g_editor.cx = 0;
 	g_editor.want_cx = 0;
 	g_editor.dirty = 1;
+	highlight_mark_dirty();
 }
 
 void editor_delete_backspace(void)
@@ -91,6 +95,7 @@ void editor_delete_backspace(void)
 		g_editor.cx--;
 		g_editor.dirty = 1;
 		g_editor.want_cx = g_editor.cx;
+		highlight_mark_dirty();
 		return;
 	}
 
@@ -112,6 +117,7 @@ void editor_delete_backspace(void)
 	g_editor.cx = prev_len;
 	g_editor.want_cx = g_editor.cx;
 	g_editor.dirty = 1;
+	highlight_mark_dirty();
 }
 
 void editor_delete_char(void)
@@ -130,6 +136,7 @@ void editor_delete_char(void)
 	{
 		line_delete_char(line, g_editor.cx);
 		g_editor.dirty = 1;
+		highlight_mark_dirty();
 		return;
 	}
 
@@ -147,6 +154,7 @@ void editor_delete_char(void)
 	memmove(&g_editor.lines[g_editor.cy + 1], &g_editor.lines[g_editor.cy + 2], sizeof(Line) * (g_editor.num_lines - g_editor.cy - 2));
 	g_editor.num_lines--;
 	g_editor.dirty = 1;
+	highlight_mark_dirty();
 }
 
 void editor_move_left(void)
