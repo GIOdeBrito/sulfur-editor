@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "complete.h"
 #include "editor.h"
 #include "line.h"
 #include "util.h"
@@ -30,6 +31,7 @@ void editor_init(void)
 	g_editor.status[0] = '\0';
 	g_editor.eol = EOL_LF;
 	g_editor.trailing_nl = 0;
+	complete_reset();
 }
 
 void editor_free(void)

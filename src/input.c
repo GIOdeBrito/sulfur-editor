@@ -3,6 +3,7 @@
 
 #include "buffer.h"
 #include "common.h"
+#include "complete.h"
 #include "edit.h"
 #include "editor.h"
 #include "input.h"
@@ -13,6 +14,7 @@ int editor_prompt_filename(void)
 	char name[FILENAME_LIMIT];
 	int rows;
 
+	complete_reset();
 	rows = LINES - 1;
 	echo();
 	curs_set(1);
@@ -35,6 +37,8 @@ int editor_request_quit(void)
 {
 	int msg_row;
 	int key;
+
+	complete_reset();
 
 	if(g_editor.dirty == 0)
 	{
@@ -80,6 +84,16 @@ int editor_request_quit(void)
 
 int editor_handle_key(int key)
 {
+	if(complete_is_active())
+	{
+		if(complete_handle_key(key))
+		{
+			return 0;
+		}
+
+		complete_reset();
+	}
+
 	if(key == CTRL_KEY('q') || key == CTRL_KEY('x'))
 	{
 		return editor_request_quit();
@@ -162,6 +176,13 @@ int editor_handle_key(int key)
 	if(key >= 32 && key <= 126)
 	{
 		editor_insert_char((char)key);
+		complete_update();
+		return 0;
+	}
+
+	if(key == CTRL_KEY(' '))
+	{
+		complete_update_forced();
 		return 0;
 	}
 
@@ -191,6 +212,7 @@ void editor_run(void)
 		erase();
 		editor_draw_lines();
 		editor_draw_status();
+		complete_draw();
 		text_off = editor_text_offset();
 		cursor_x = text_off + (int)g_editor.cx - (int)g_editor.col_off;
 
