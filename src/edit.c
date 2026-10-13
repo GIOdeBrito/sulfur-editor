@@ -6,6 +6,7 @@
 #include "editor.h"
 #include "highlight.h"
 #include "line.h"
+#include "view.h"
 
 void editor_insert_char(char c)
 {
@@ -159,8 +160,18 @@ void editor_delete_char(void)
 
 void editor_move_left(void)
 {
+	Line *line;
+
 	if(g_editor.cx > 0)
 	{
+		line = editor_current_line();
+
+		if(line == NULL)
+		{
+			g_editor.cx = 0;
+			return;
+		}
+
 		g_editor.cx--;
 		g_editor.want_cx = g_editor.cx;
 		return;
@@ -172,6 +183,13 @@ void editor_move_left(void)
 	}
 
 	g_editor.cy--;
+
+	if(g_editor.cy >= g_editor.num_lines)
+	{
+		g_editor.cx = 0;
+		return;
+	}
+
 	editor_clamp_cursor();
 	g_editor.cx = editor_current_line()->len;
 	g_editor.want_cx = g_editor.cx;
@@ -219,12 +237,19 @@ void editor_move_up(void)
 
 void editor_move_down(void)
 {
-	if(g_editor.cy + 1 >= g_editor.num_lines)
+	if(g_editor.cy + 1 > editor_max_cy())
 	{
 		return;
 	}
 
 	g_editor.cy++;
+
+	if(g_editor.cy >= g_editor.num_lines)
+	{
+		g_editor.cx = 0;
+		return;
+	}
+
 	g_editor.cx = g_editor.want_cx;
 	editor_clamp_cursor();
 }

@@ -103,8 +103,28 @@ static void editor_draw_colored_line(int y, int text_x, Line *line, size_t file_
 	}
 }
 
+size_t editor_max_cy(void)
+{
+	int view_rows;
+
+	view_rows = LINES - 2;
+
+	if(view_rows < 1)
+	{
+		view_rows = 1;
+	}
+
+	if(g_editor.num_lines == 0)
+	{
+		return 0;
+	}
+
+	return g_editor.num_lines + (size_t)view_rows - 2;
+}
+
 void editor_scroll(void)
-{	int view_rows;
+{
+	int view_rows;
 	int view_cols;
 
 	view_rows = LINES - 2;
@@ -123,6 +143,16 @@ void editor_scroll(void)
 	if(g_editor.cy >= g_editor.row_off + (size_t)view_rows)
 	{
 		g_editor.row_off = g_editor.cy - (size_t)view_rows + 1;
+	}
+
+	if(g_editor.num_lines > 0 && g_editor.row_off > g_editor.num_lines - 1)
+	{
+		g_editor.row_off = g_editor.num_lines - 1;
+	}
+
+	if(g_editor.cy >= g_editor.num_lines)
+	{
+		return;
 	}
 
 	if(g_editor.cx < g_editor.col_off)

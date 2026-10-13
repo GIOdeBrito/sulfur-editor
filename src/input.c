@@ -151,6 +151,11 @@ int editor_handle_key(int key)
 
 	if(key == KEY_END || key == CTRL_KEY('e'))
 	{
+		if(g_editor.cy >= g_editor.num_lines && g_editor.num_lines > 0)
+		{
+			g_editor.cy = g_editor.num_lines - 1;
+		}
+
 		editor_clamp_cursor();
 		g_editor.cx = editor_current_line()->len;
 		g_editor.want_cx = g_editor.cx;

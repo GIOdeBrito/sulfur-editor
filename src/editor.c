@@ -7,6 +7,7 @@
 #include "highlight.h"
 #include "line.h"
 #include "util.h"
+#include "view.h"
 
 Editor g_editor;
 
@@ -75,10 +76,13 @@ Line *editor_current_line(void)
 void editor_clamp_cursor(void)
 {
 	Line *line;
+	size_t max_cy;
 
-	if(g_editor.cy >= g_editor.num_lines)
+	max_cy = editor_max_cy();
+
+	if(g_editor.cy > max_cy)
 	{
-		g_editor.cy = g_editor.num_lines - 1;
+		g_editor.cy = max_cy;
 	}
 
 	line = editor_current_line();
