@@ -1,0 +1,208 @@
+#include <ncurses.h>
+#include <stdio.h>
+
+#include "buffer.h"
+#include "common.h"
+#include "edit.h"
+#include "editor.h"
+#include "input.h"
+#include "view.h"
+
+int editor_prompt_filename(void)
+{
+	char name[FILENAME_LIMIT];
+	int rows;
+
+	rows = LINES - 1;
+	echo();
+	curs_set(1);
+	mvprintw(rows, 0, "Save as: ");
+	clrtoeol();
+	getnstr(name, (int)sizeof(name) - 1);
+	noecho();
+
+	if(name[0] == '\0')
+	{
+		editor_set_status("Save cancelled");
+		return -1;
+	}
+
+	snprintf(g_editor.filename, sizeof(g_editor.filename), "%s", name);
+	return editor_save();
+}
+
+int editor_request_quit(void)
+{
+	int msg_row;
+	int key;
+
+	if(g_editor.dirty == 0)
+	{
+		return 1;
+	}
+
+	msg_row = LINES - 2;
+	move(msg_row, 0);
+	clrtoeol();
+	mvaddnstr(msg_row, 0, "Unsaved changes. Save? (y/n, Esc cancel)", COLS);
+	refresh();
+	curs_set(1);
+	key = getch();
+
+	if(key == 'y' || key == 'Y')
+	{
+		if(g_editor.filename[0] == '\0')
+		{
+			if(editor_prompt_filename() != 0)
+			{
+				return 0;
+			}
+
+			return 1;
+		}
+
+		if(editor_save() != 0)
+		{
+			return 0;
+		}
+
+		return 1;
+	}
+
+	if(key == 'n' || key == 'N')
+	{
+		return 1;
+	}
+
+	editor_set_status("Quit cancelled");
+	return 0;
+}
+
+int editor_handle_key(int key)
+{
+	if(key == CTRL_KEY('q') || key == CTRL_KEY('x'))
+	{
+		return editor_request_quit();
+	}
+
+	if(key == CTRL_KEY('s'))
+	{
+		if(g_editor.filename[0] == '\0')
+		{
+			editor_prompt_filename();
+			return 0;
+		}
+
+		editor_save();
+		return 0;
+	}
+
+	if(key == KEY_LEFT)
+	{
+		editor_move_left();
+		return 0;
+	}
+
+	if(key == KEY_RIGHT)
+	{
+		editor_move_right();
+		return 0;
+	}
+
+	if(key == KEY_UP)
+	{
+		editor_move_up();
+		return 0;
+	}
+
+	if(key == KEY_DOWN)
+	{
+		editor_move_down();
+		return 0;
+	}
+
+	if(key == KEY_HOME || key == CTRL_KEY('a'))
+	{
+		g_editor.cx = 0;
+		g_editor.want_cx = 0;
+		return 0;
+	}
+
+	if(key == KEY_END || key == CTRL_KEY('e'))
+	{
+		editor_clamp_cursor();
+		g_editor.cx = editor_current_line()->len;
+		g_editor.want_cx = g_editor.cx;
+		return 0;
+	}
+
+	if(key == KEY_BACKSPACE || key == 127 || key == CTRL_KEY('h'))
+	{
+		editor_delete_backspace();
+		return 0;
+	}
+
+	if(key == KEY_DC)
+	{
+		editor_delete_char();
+		return 0;
+	}
+
+	if(key == '\n' || key == '\r' || key == KEY_ENTER)
+	{
+		editor_insert_newline();
+		return 0;
+	}
+
+	if(key == KEY_RESIZE)
+	{
+		return 0;
+	}
+
+	if(key >= 32 && key <= 126)
+	{
+		editor_insert_char((char)key);
+		return 0;
+	}
+
+	if(key == '\t')
+	{
+		editor_insert_char('\t');
+		return 0;
+	}
+
+	return 0;
+}
+
+void editor_run(void)
+{
+	int key;
+	int done;
+
+	done = 0;
+
+	while(done == 0)
+	{
+		int text_off;
+		int cursor_x;
+
+		editor_clamp_cursor();
+		editor_scroll();
+		erase();
+		editor_draw_lines();
+		editor_draw_status();
+		text_off = editor_text_offset();
+		cursor_x = text_off + (int)g_editor.cx - (int)g_editor.col_off;
+
+		if(cursor_x < text_off)
+		{
+			cursor_x = text_off;
+		}
+
+		move((int)(g_editor.cy - g_editor.row_off), cursor_x);
+		curs_set(1);
+		refresh();
+		key = getch();
+		done = editor_handle_key(key);
+	}
+}
