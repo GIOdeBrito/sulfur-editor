@@ -83,6 +83,7 @@ static void mouse_scroll(int direction)
 static int mouse_click(MEVENT *ev)
 {
 	int text_off;
+	int map_w;
 	size_t file_row;
 	size_t want;
 
@@ -94,6 +95,32 @@ static int mouse_click(MEVENT *ev)
 	if(ev->y < 0 || ev->y >= LINES - 2)
 	{
 		return 0;
+	}
+
+	if(g_editor.num_lines == 0)
+	{
+		return 0;
+	}
+
+	map_w = editor_map_width();
+
+	if(map_w > 0 && ev->x >= COLS - map_w)
+	{
+		size_t target;
+
+		target = editor_map_bucket_start(ev->y);
+
+		if(target >= g_editor.num_lines)
+		{
+			return 0;
+		}
+
+		g_editor.cy = target;
+		editor_select_clear();
+		complete_reset();
+		editor_clamp_cursor();
+		g_editor.want_cx = g_editor.cx;
+		return 1;
 	}
 
 	file_row = g_editor.row_off + (size_t)ev->y;

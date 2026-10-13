@@ -8,6 +8,9 @@
 #include "highlight.h"
 #include "view.h"
 
+#define MAP_CONTENT_WIDTH 3
+#define MAP_WIDTH 4
+
 int editor_gutter_width(void)
 {
 	size_t n;
@@ -39,7 +42,7 @@ int editor_view_cols(void)
 {
 	int cols;
 
-	cols = COLS - editor_text_offset();
+	cols = COLS - editor_text_offset() - editor_map_width();
 
 	if(cols < 1)
 	{
@@ -47,6 +50,43 @@ int editor_view_cols(void)
 	}
 
 	return cols;
+}
+
+int editor_map_width(void)
+{
+	if(COLS < editor_text_offset() + 1 + MAP_WIDTH)
+	{
+		return 0;
+	}
+
+	return MAP_WIDTH;
+}
+
+size_t editor_map_bucket_start(int y)
+{
+	int view_rows;
+	size_t num;
+
+	view_rows = LINES - 2;
+
+	if(view_rows < 1)
+	{
+		view_rows = 1;
+	}
+
+	if(y < 0)
+	{
+		return 0;
+	}
+
+	num = g_editor.num_lines;
+
+	if(num <= (size_t)view_rows)
+	{
+		return (size_t)y;
+	}
+
+	return (size_t)y * num / (size_t)view_rows;
 }
 
 static int editor_is_selected(size_t file_row, size_t col)
@@ -238,6 +278,210 @@ void editor_scroll(void)
 	}
 }
 
+static HlClass editor_map_class(Line *line, size_t row)
+{
+	const unsigned char *cls;
+	size_t tallies[7];
+	size_t i;
+	HlClass best;
+	size_t best_n;
+
+	if(g_editor.filetype != HL_C || highlight_use_color() == 0)
+	{
+		return HL_NORMAL;
+	}
+
+	if(line == NULL)
+	{
+		return HL_NORMAL;
+	}
+
+	cls = highlight_classes(row);
+
+	if(cls == NULL)
+	{
+		return HL_NORMAL;
+	}
+
+	memset(tallies, 0, sizeof(tallies));
+
+	for(i = 0; i < line->len; i++)
+	{
+		if(cls[i] < 7)
+		{
+			tallies[cls[i]]++;
+		}
+	}
+
+	best = HL_NORMAL;
+	best_n = 0;
+
+	for(i = (size_t)HL_KEYWORD; i <= (size_t)HL_PREPROC; i++)
+	{
+		if(tallies[i] > best_n)
+		{
+			best_n = tallies[i];
+			best = (HlClass)i;
+		}
+	}
+
+	return best;
+}
+
+static void editor_draw_map(void)
+{
+	int view_rows;
+	int view_cols;
+	int sep_x;
+	int map_x;
+	int y;
+
+	if(editor_map_width() == 0)
+	{
+		return;
+	}
+
+	view_rows = LINES - 2;
+
+	if(view_rows < 1)
+	{
+		return;
+	}
+
+	view_cols = editor_view_cols();
+	sep_x = COLS - MAP_WIDTH;
+	map_x = sep_x + 1;
+
+	for(y = 0; y < view_rows; y++)
+	{
+		size_t first;
+		size_t end;
+		size_t row;
+		size_t max_len;
+		size_t max_row;
+		size_t cursor_row;
+		int fill;
+		int in_view;
+		int is_cursor;
+		int i;
+		int tint_attr;
+
+		mvaddch(y, sep_x, ACS_VLINE);
+
+		if(g_editor.num_lines == 0)
+		{
+			continue;
+		}
+
+		first = editor_map_bucket_start(y);
+		end = editor_map_bucket_start(y + 1);
+
+		if(first >= g_editor.num_lines)
+		{
+			continue;
+		}
+
+		if(end > g_editor.num_lines)
+		{
+			end = g_editor.num_lines;
+		}
+
+		max_len = 0;
+		max_row = first;
+
+		for(row = first; row < end; row++)
+		{
+			if(g_editor.lines[row].len > max_len)
+			{
+				max_len = g_editor.lines[row].len;
+				max_row = row;
+			}
+		}
+
+		if(max_len == 0)
+		{
+			fill = 0;
+		}
+		else
+		{
+			fill = 1 + (int)((2 * max_len) / (size_t)view_cols);
+
+			if(fill > MAP_CONTENT_WIDTH)
+			{
+				fill = MAP_CONTENT_WIDTH;
+			}
+		}
+
+		in_view = 0;
+
+		if(first < g_editor.row_off + (size_t)view_rows && end > g_editor.row_off)
+		{
+			in_view = 1;
+		}
+
+		cursor_row = g_editor.cy;
+
+		if(cursor_row >= g_editor.num_lines)
+		{
+			cursor_row = g_editor.num_lines - 1;
+		}
+
+		is_cursor = 0;
+
+		if(cursor_row >= first && cursor_row < end)
+		{
+			is_cursor = 1;
+		}
+
+		tint_attr = A_NORMAL;
+
+		if(fill > 0)
+		{
+			tint_attr = highlight_attr(editor_map_class(&g_editor.lines[max_row], max_row));
+		}
+
+		for(i = 0; i < MAP_CONTENT_WIDTH; i++)
+		{
+			int attr;
+
+			if(i < fill)
+			{
+				attr = tint_attr | A_REVERSE;
+
+				if(in_view != 0)
+				{
+					attr |= A_BOLD;
+				}
+			}
+			else if(in_view != 0)
+			{
+				attr = A_REVERSE;
+			}
+			else
+			{
+				attr = A_NORMAL;
+			}
+
+			if(is_cursor != 0)
+			{
+				attr |= A_UNDERLINE;
+			}
+
+			if(attr != A_NORMAL)
+			{
+				attron(attr);
+			}
+
+			mvaddch(y, map_x + i, ' ');
+
+			if(attr != A_NORMAL)
+			{
+				attroff(attr);
+			}
+		}
+	}
+}
+
 void editor_draw_lines(void)
 {
 	int view_rows;
@@ -351,6 +595,8 @@ void editor_draw_lines(void)
 			i = m;
 		}
 	}
+
+	editor_draw_map();
 }
 
 void editor_draw_status(void)
