@@ -1,3 +1,4 @@
+#include <ncurses.h>
 #include <string.h>
 
 #include "buffer.h"
@@ -13,6 +14,7 @@ void editor_insert_char(char c)
 	Line *line;
 	int i;
 
+	editor_select_clear();
 	line = editor_current_line();
 
 	if(line == NULL)
@@ -46,6 +48,7 @@ void editor_insert_newline(void)
 	Line *line;
 	size_t tail_len;
 
+	editor_select_clear();
 	line = editor_current_line();
 
 	if(line == NULL)
@@ -83,6 +86,7 @@ void editor_delete_backspace(void)
 	Line *prev;
 	size_t prev_len;
 
+	editor_select_clear();
 	line = editor_current_line();
 
 	if(line == NULL)
@@ -126,6 +130,7 @@ void editor_delete_char(void)
 	Line *line;
 	Line *next;
 
+	editor_select_clear();
 	line = editor_current_line();
 
 	if(line == NULL)
@@ -158,9 +163,18 @@ void editor_delete_char(void)
 	highlight_mark_dirty();
 }
 
-void editor_move_left(void)
+void editor_move_left(int extend)
 {
 	Line *line;
+
+	if(extend != 0)
+	{
+		editor_select_mark();
+	}
+	else
+	{
+		editor_select_clear();
+	}
 
 	if(g_editor.cx > 0)
 	{
@@ -195,9 +209,18 @@ void editor_move_left(void)
 	g_editor.want_cx = g_editor.cx;
 }
 
-void editor_move_right(void)
+void editor_move_right(int extend)
 {
 	Line *line;
+
+	if(extend != 0)
+	{
+		editor_select_mark();
+	}
+	else
+	{
+		editor_select_clear();
+	}
 
 	line = editor_current_line();
 
@@ -223,8 +246,17 @@ void editor_move_right(void)
 	g_editor.want_cx = 0;
 }
 
-void editor_move_up(void)
+void editor_move_up(int extend)
 {
+	if(extend != 0)
+	{
+		editor_select_mark();
+	}
+	else
+	{
+		editor_select_clear();
+	}
+
 	if(g_editor.cy == 0)
 	{
 		return;
@@ -235,8 +267,17 @@ void editor_move_up(void)
 	editor_clamp_cursor();
 }
 
-void editor_move_down(void)
+void editor_move_down(int extend)
 {
+	if(extend != 0)
+	{
+		editor_select_mark();
+	}
+	else
+	{
+		editor_select_clear();
+	}
+
 	if(g_editor.cy + 1 > editor_max_cy())
 	{
 		return;
@@ -252,4 +293,105 @@ void editor_move_down(void)
 
 	g_editor.cx = g_editor.want_cx;
 	editor_clamp_cursor();
+}
+
+void editor_move_page(int direction, int extend)
+{
+	int view_rows;
+	size_t step;
+	size_t max_cy;
+
+	if(extend != 0)
+	{
+		editor_select_mark();
+	}
+	else
+	{
+		editor_select_clear();
+	}
+
+	view_rows = LINES - 2;
+
+	if(view_rows < 1)
+	{
+		view_rows = 1;
+	}
+
+	step = (size_t)view_rows;
+
+	if(direction < 0)
+	{
+		if(g_editor.cy <= step)
+		{
+			g_editor.cy = 0;
+		}
+		else
+		{
+			g_editor.cy -= step;
+		}
+	}
+	else
+	{
+		max_cy = editor_max_cy();
+		g_editor.cy += step;
+
+		if(g_editor.cy > max_cy)
+		{
+			g_editor.cy = max_cy;
+		}
+	}
+
+	if(g_editor.cy >= g_editor.num_lines)
+	{
+		g_editor.cx = 0;
+		return;
+	}
+
+	g_editor.cx = g_editor.want_cx;
+	editor_clamp_cursor();
+}
+
+void editor_line_home(int extend)
+{
+	if(extend != 0)
+	{
+		editor_select_mark();
+	}
+	else
+	{
+		editor_select_clear();
+	}
+
+	g_editor.cx = 0;
+	g_editor.want_cx = 0;
+}
+
+void editor_line_end(int extend)
+{
+	Line *line;
+
+	if(extend != 0)
+	{
+		editor_select_mark();
+	}
+	else
+	{
+		editor_select_clear();
+	}
+
+	if(g_editor.cy >= g_editor.num_lines && g_editor.num_lines > 0)
+	{
+		g_editor.cy = g_editor.num_lines - 1;
+	}
+
+	editor_clamp_cursor();
+	line = editor_current_line();
+
+	if(line == NULL)
+	{
+		return;
+	}
+
+	g_editor.cx = line->len;
+	g_editor.want_cx = g_editor.cx;
 }

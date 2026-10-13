@@ -75,6 +75,7 @@ static void mouse_scroll(int direction)
 		g_editor.cy = g_editor.row_off + (size_t)view_rows - 1;
 	}
 
+	editor_select_clear();
 	editor_clamp_cursor();
 	g_editor.want_cx = g_editor.cx;
 }
@@ -104,6 +105,7 @@ static int mouse_click(MEVENT *ev)
 
 	text_off = editor_text_offset();
 	g_editor.cy = file_row;
+	editor_select_clear();
 	complete_reset();
 
 	if(ev->x <= text_off)

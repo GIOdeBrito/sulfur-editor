@@ -22,6 +22,9 @@ typedef struct
 	size_t want_cx;
 	size_t row_off;
 	size_t col_off;
+	int sel_active;
+	size_t sel_ax;
+	size_t sel_ay;
 	char filename[FILENAME_LIMIT];
 	int dirty;
 	char status[STATUS_LIMIT];
@@ -37,5 +40,8 @@ void editor_free(void);
 void editor_set_status(const char *msg);
 Line *editor_current_line(void);
 void editor_clamp_cursor(void);
+void editor_select_clear(void);
+void editor_select_mark(void);
+void editor_selection_range(size_t *sy, size_t *sx, size_t *ey, size_t *ex);
 
 #endif

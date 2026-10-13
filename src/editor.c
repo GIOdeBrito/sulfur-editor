@@ -28,6 +28,9 @@ void editor_init(void)
 	g_editor.want_cx = 0;
 	g_editor.row_off = 0;
 	g_editor.col_off = 0;
+	g_editor.sel_active = 0;
+	g_editor.sel_ax = 0;
+	g_editor.sel_ay = 0;
 	g_editor.filename[0] = '\0';
 	g_editor.dirty = 0;
 	g_editor.status[0] = '\0';
@@ -95,5 +98,60 @@ void editor_clamp_cursor(void)
 	if(g_editor.cx > line->len)
 	{
 		g_editor.cx = line->len;
+	}
+
+	if(g_editor.sel_active != 0)
+	{
+		if(g_editor.sel_ay > max_cy)
+		{
+			g_editor.sel_ay = max_cy;
+		}
+
+		if(g_editor.sel_ay < g_editor.num_lines && g_editor.sel_ax > g_editor.lines[g_editor.sel_ay].len)
+		{
+			g_editor.sel_ax = g_editor.lines[g_editor.sel_ay].len;
+		}
+	}
+}
+
+void editor_select_clear(void)
+{
+	g_editor.sel_active = 0;
+}
+
+void editor_select_mark(void)
+{
+	if(g_editor.sel_active != 0)
+	{
+		return;
+	}
+
+	g_editor.sel_ax = g_editor.cx;
+	g_editor.sel_ay = g_editor.cy;
+	g_editor.sel_active = 1;
+}
+
+void editor_selection_range(size_t *sy, size_t *sx, size_t *ey, size_t *ex)
+{
+	size_t t;
+
+	if(sy == NULL || sx == NULL || ey == NULL || ex == NULL)
+	{
+		return;
+	}
+
+	*sy = g_editor.sel_ay;
+	*sx = g_editor.sel_ax;
+	*ey = g_editor.cy;
+	*ex = g_editor.cx;
+
+	if(*ey < *sy || (*ey == *sy && *ex < *sx))
+	{
+		t = *sy;
+		*sy = *ey;
+		*ey = t;
+		t = *sx;
+		*sx = *ex;
+		*ex = t;
 	}
 }

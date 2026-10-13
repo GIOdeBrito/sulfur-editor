@@ -120,45 +120,99 @@ int editor_handle_key(int key)
 
 	if(key == KEY_LEFT)
 	{
-		editor_move_left();
+		editor_move_left(0);
 		return 0;
 	}
 
 	if(key == KEY_RIGHT)
 	{
-		editor_move_right();
+		editor_move_right(0);
 		return 0;
 	}
 
 	if(key == KEY_UP)
 	{
-		editor_move_up();
+		editor_move_up(0);
 		return 0;
 	}
 
 	if(key == KEY_DOWN)
 	{
-		editor_move_down();
+		editor_move_down(0);
+		return 0;
+	}
+
+	if(key == KEY_SLEFT)
+	{
+		editor_move_left(1);
+		return 0;
+	}
+
+	if(key == KEY_SRIGHT)
+	{
+		editor_move_right(1);
+		return 0;
+	}
+
+	/* ncurses has no KEY_SUP/KEY_SDOWN; xterm Shift+Up/Down arrive
+	via the kri/kind capabilities as KEY_SR/KEY_SF. */
+	if(key == KEY_SR)
+	{
+		editor_move_up(1);
+		return 0;
+	}
+
+	if(key == KEY_SF)
+	{
+		editor_move_down(1);
+		return 0;
+	}
+
+	if(key == KEY_PPAGE)
+	{
+		editor_move_page(-1, 0);
+		return 0;
+	}
+
+	if(key == KEY_NPAGE)
+	{
+		editor_move_page(1, 0);
+		return 0;
+	}
+
+	if(key == KEY_SPREVIOUS)
+	{
+		editor_move_page(-1, 1);
+		return 0;
+	}
+
+	if(key == KEY_SNEXT)
+	{
+		editor_move_page(1, 1);
 		return 0;
 	}
 
 	if(key == KEY_HOME || key == CTRL_KEY('a'))
 	{
-		g_editor.cx = 0;
-		g_editor.want_cx = 0;
+		editor_line_home(0);
 		return 0;
 	}
 
 	if(key == KEY_END || key == CTRL_KEY('e'))
 	{
-		if(g_editor.cy >= g_editor.num_lines && g_editor.num_lines > 0)
-		{
-			g_editor.cy = g_editor.num_lines - 1;
-		}
+		editor_line_end(0);
+		return 0;
+	}
 
-		editor_clamp_cursor();
-		g_editor.cx = editor_current_line()->len;
-		g_editor.want_cx = g_editor.cx;
+	if(key == KEY_SHOME)
+	{
+		editor_line_home(1);
+		return 0;
+	}
+
+	if(key == KEY_SEND)
+	{
+		editor_line_end(1);
 		return 0;
 	}
 

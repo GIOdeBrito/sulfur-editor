@@ -49,12 +49,50 @@ int editor_view_cols(void)
 	return cols;
 }
 
+static int editor_is_selected(size_t file_row, size_t col)
+{
+	size_t sy;
+	size_t sx;
+	size_t ey;
+	size_t ex;
+
+	if(g_editor.sel_active == 0)
+	{
+		return 0;
+	}
+
+	editor_selection_range(&sy, &sx, &ey, &ex);
+
+	if(file_row < sy || file_row > ey)
+	{
+		return 0;
+	}
+
+	if(sy == ey)
+	{
+		return (col >= sx && col < ex) ? 1 : 0;
+	}
+
+	if(file_row == sy)
+	{
+		return (col >= sx) ? 1 : 0;
+	}
+
+	if(file_row == ey)
+	{
+		return (col < ex) ? 1 : 0;
+	}
+
+	return 1;
+}
+
 static void editor_draw_colored_line(int y, int text_x, Line *line, size_t file_row, int view_cols)
 {
 	const unsigned char *cls;
 	size_t start;
 	size_t end;
 	size_t i;
+	size_t k;
 	int col;
 
 	if(line == NULL || line->data == NULL || line->len == 0)
@@ -95,9 +133,43 @@ static void editor_draw_colored_line(int y, int text_x, Line *line, size_t file_
 		}
 
 		attr = highlight_attr((HlClass)c);
-		attron(attr);
-		mvaddnstr(y, col, &line->data[i], (int)(j - i));
-		attroff(attr);
+		k = i;
+
+		while(k < j)
+		{
+			size_t m;
+			int sel;
+
+			sel = editor_is_selected(file_row, k);
+			m = k + 1;
+
+			while(m < j && editor_is_selected(file_row, m) == sel)
+			{
+				m++;
+			}
+
+			if(sel != 0)
+			{
+				attron(attr | A_REVERSE);
+			}
+			else
+			{
+				attron(attr);
+			}
+
+			mvaddnstr(y, col + (int)(k - i), &line->data[k], (int)(m - k));
+
+			if(sel != 0)
+			{
+				attroff(attr | A_REVERSE);
+			}
+			else
+			{
+				attroff(attr);
+			}
+
+			k = m;
+		}
 		col += (int)(j - i);
 		i = j;
 	}
@@ -184,10 +256,11 @@ void editor_draw_lines(void)
 	{
 		size_t file_row;
 		Line *line;
-		const char *visible;
 		size_t visible_len;
 		char numbuf[32];
 		int is_cursor;
+		size_t i;
+		int col;
 
 		file_row = g_editor.row_off + (size_t)y;
 		move(y, 0);
@@ -239,7 +312,6 @@ void editor_draw_lines(void)
 			continue;
 		}
 
-		visible = &line->data[g_editor.col_off];
 		visible_len = line->len - g_editor.col_off;
 
 		if(visible_len > (size_t)view_cols)
@@ -247,7 +319,37 @@ void editor_draw_lines(void)
 			visible_len = (size_t)view_cols;
 		}
 
-		mvaddnstr(y, text_x, visible, (int)visible_len);
+		i = g_editor.col_off;
+		col = text_x;
+
+		while(i < g_editor.col_off + visible_len)
+		{
+			size_t m;
+			int sel;
+
+			sel = editor_is_selected(file_row, i);
+			m = i + 1;
+
+			while(m < g_editor.col_off + visible_len && editor_is_selected(file_row, m) == sel)
+			{
+				m++;
+			}
+
+			if(sel != 0)
+			{
+				attron(A_REVERSE);
+			}
+
+			mvaddnstr(y, col, &line->data[i], (int)(m - i));
+
+			if(sel != 0)
+			{
+				attroff(A_REVERSE);
+			}
+
+			col += (int)(m - i);
+			i = m;
+		}
 	}
 }
 

@@ -29,6 +29,9 @@ C11 ncurses text editor. Single binary, no test framework, no CI.
 - Complete: auto-popup after 2 word chars + `Ctrl-Space` force; `Tab`/`Enter` accept, `Esc` cancels; case-sensitive, frequency then A-Z; fixed tables, no malloc.
 - Highlight: C files only (`.c`/`.h`), default-background palette, per-line cache + full rescan on dirty flag.
 - Mouse: click-to-move + wheel scroll (±3 rows); silent-off fallback when terminal lacks support.
+- Select: `sel_active`/`sel_ax`/`sel_ay` anchor in `Editor`, active end is `cx`/`cy`, end-exclusive; any plain move, mutation, or mouse click clears, Shift-moves mark+extend; both plain and color draw paths split runs with `A_REVERSE`.
+- Keys: ncurses has **no** `KEY_SUP`/`KEY_SDOWN` — Shift+Up/Down arrive via `kri`/`kind` as `KEY_SR`/`KEY_SF`; Shift+arrows/Home/End are `KEY_SLEFT`/`SRIGHT`/`SHOME`/`SSEND`, Shift+PgUp/PgDn are `KEY_SPREVIOUS`/`KEY_SNEXT`.
+- Page: `KEY_PPAGE`/`KEY_NPAGE` move exactly `LINES-2` rows, clamped to `editor_max_cy()`, `row_off` follows via `editor_scroll()`.
 
 ## Verification (headless pty, no fixtures)
 
