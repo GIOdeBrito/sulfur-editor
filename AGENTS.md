@@ -5,6 +5,7 @@ C11 ncurses text editor. Single binary, no test framework, no CI.
 ## Build
 
 - `make` → `build/editor`. `make clean` wipes `build/` (gitignored — never commit it).
+- Run as `build/editor [filename]` (`main.c` rejects `argc > 2`).
 - Requires `libncurses-dev`; link flag is `-lncurses` (`Makefile` `LDLIBS`).
 - `make` must be zero-warning (`-Wall -Wextra -std=c11 -D_POSIX_C_SOURCE=200809L`).
 - New `.c` file: add to `Makefile` `OBJS` **and** add a per-object header-dep line, else incremental builds go stale.
@@ -12,7 +13,7 @@ C11 ncurses text editor. Single binary, no test framework, no CI.
 ## Layout (`src/` + `include/`, global `Editor g_editor` in `editor.h`)
 
 - `main.c`: `editor_init → editor_open → editor_start_screen → editor_run → editor_free`.
-- `buffer.c`: open/save, EOL detection/preservation. `edit.c`: mutations + cursor moves. `view.c`: scroll/gutter/draw. `input.c`: keys + prompts. `screen.c`: ncurses/termios init. `complete.c` / `highlight.c` / `mouse.c`: features.
+- `editor.c`: init/free, `editor_clamp_cursor`, selection helpers. `line.c`/`util.c`: line-buffer growth + `die`. `buffer.c`: open/save, EOL detection/preservation. `edit.c`: mutations + cursor moves. `view.c`: scroll/gutter/draw. `input.c`: keys + prompts + `editor_run` loop (clamp + `editor_scroll` + draw per frame). `screen.c`: ncurses/termios init. `complete.c` / `highlight.c` / `mouse.c`: features.
 - Style (enforced): tabs, Allman braces, guard clauses, `NULL` uppercase.
 
 ## Invariants agents commonly break
@@ -32,7 +33,7 @@ C11 ncurses text editor. Single binary, no test framework, no CI.
 - Map: always-visible right edge (`editor_map_width()` = 4: 3 content + `ACS_VLINE`; hidden when it would leave <1 text col, `view_cols` already narrowed). Buckets via `editor_map_bucket_start()` — 1:1 top-packed when the file fits, else floor-proportional; per-column coverage of longest line in bucket (each of 3 cells samples one horizontal third of `view_cols` for non-blank, last cell also covers overflow past `view_cols`); glyph is reversed-space rectangles, tint is dominant non-`NORMAL` class of the longest line via `highlight_attr | A_REVERSE` (plain when non-C/colorless); viewport wash `A_REVERSE` + `A_BOLD` blocks, cursor bucket + `A_UNDERLINE`.
 - Select: `sel_active`/`sel_ax`/`sel_ay` anchor in `Editor`, active end is `cx`/`cy`, end-exclusive; Backspace/Del delete the range (multi-line joins head+tail, never drops below 1 line), typing/`Enter` replace it, `Tab` block-indents touched lines (`ex==0` excludes the last line) and keeps the selection shifted; plain moves, mouse clicks, and completion-accept only clear. Both plain and color draw paths split runs with `A_REVERSE`.
 - Keys: ncurses has **no** `KEY_SUP`/`KEY_SDOWN` — Shift+Up/Down arrive via `kri`/`kind` as `KEY_SR`/`KEY_SF`; Shift+arrows/Home/End are `KEY_SLEFT`/`SRIGHT`/`SHOME`/`SSEND`, Shift+PgUp/PgDn are `KEY_SPREVIOUS`/`KEY_SNEXT`. Shift+Tab is `KEY_BTAB` → unindent (block over selection, else current line); there is deliberately **no** Ctrl+Tab binding (no standard encoding — plain xterm sends bare `0x09`).
-- Page: `KEY_PPAGE`/`KEY_NPAGE` move exactly `LINES-2` rows, clamped to `editor_max_cy()`, `row_off` follows via `editor_scroll()`.
+- Page: `KEY_PPAGE`/`KEY_NPAGE` move exactly `LINES-2` rows, clamped to `editor_max_cy()`, `row_off` follows via per-frame `editor_scroll()` in `editor_run` (not inside `editor_move_page`).
 
 ## Verification (headless pty, no fixtures)
 
