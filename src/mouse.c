@@ -205,6 +205,103 @@ static int mouse_click(MEVENT *ev)
 	return 1;
 }
 
+static void mouse_apply_x(int x)
+{
+	int text_off;
+	size_t want;
+
+	text_off = editor_text_offset();
+
+	if(x <= text_off)
+	{
+		g_editor.cx = 0;
+		g_editor.want_cx = 0;
+		return;
+	}
+
+	want = g_editor.col_off + (size_t)(x - text_off);
+	g_editor.cx = want;
+	editor_clamp_cursor();
+	g_editor.want_cx = g_editor.cx;
+}
+
+static int mouse_drag_edge(MEVENT *ev)
+{
+	int view_rows;
+	int map_w;
+	size_t bottom;
+
+	if(ev == NULL)
+	{
+		return 0;
+	}
+
+	if(g_editor.num_lines == 0)
+	{
+		return 0;
+	}
+
+	view_rows = LINES - 2;
+
+	if(view_rows < 1)
+	{
+		view_rows = 1;
+	}
+
+	map_w = editor_map_width();
+
+	if(map_w > 0 && ev->x >= COLS - map_w)
+	{
+		return 0;
+	}
+
+	if(ev->y <= 0)
+	{
+		if(g_editor.row_off == 0)
+		{
+			return 0;
+		}
+
+		g_editor.row_off--;
+		g_editor.cy = g_editor.row_off;
+		mouse_apply_x(ev->x);
+		return 1;
+	}
+
+	if(ev->y < view_rows - 1)
+	{
+		return 0;
+	}
+
+	bottom = g_editor.row_off + (size_t)view_rows - 1;
+
+	if(g_editor.row_off + (size_t)view_rows < g_editor.num_lines)
+	{
+		g_editor.row_off++;
+		bottom++;
+	}
+
+	if(bottom >= g_editor.num_lines)
+	{
+		bottom = g_editor.num_lines - 1;
+	}
+
+	if(ev->y >= LINES - 2 && bottom == g_editor.cy)
+	{
+		mouse_apply_x(ev->x);
+		return 1;
+	}
+
+	if(ev->y == view_rows - 1 && bottom == g_editor.cy)
+	{
+		return 0;
+	}
+
+	g_editor.cy = bottom;
+	mouse_apply_x(ev->x);
+	return 1;
+}
+
 static int mouse_drag(MEVENT *ev)
 {
 	if(ev == NULL)
@@ -215,6 +312,11 @@ static int mouse_drag(MEVENT *ev)
 	if(g_editor.sel_active == 0)
 	{
 		return 0;
+	}
+
+	if(mouse_drag_edge(ev) != 0)
+	{
+		return 1;
 	}
 
 	if(mouse_ev_to_cursor(ev) == 0)
