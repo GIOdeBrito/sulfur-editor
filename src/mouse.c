@@ -15,13 +15,14 @@ void mouse_init(void)
 	mmask_t result;
 
 	s_enabled = 0;
-	result = mousemask((mmask_t)(BUTTON1_PRESSED | BUTTON1_DOUBLE_CLICKED | BUTTON4_PRESSED | BUTTON5_PRESSED), NULL);
+	result = mousemask((mmask_t)(BUTTON1_PRESSED | BUTTON4_PRESSED | BUTTON5_PRESSED), NULL);
 
 	if(result == 0)
 	{
 		return;
 	}
 
+	mouseinterval(0);
 	s_enabled = 1;
 }
 
@@ -175,7 +176,7 @@ int mouse_handle(void)
 		return 1;
 	}
 
-	if((ev.bstate & (BUTTON1_PRESSED | BUTTON1_CLICKED | BUTTON1_DOUBLE_CLICKED)) != 0)
+	if((ev.bstate & BUTTON1_PRESSED) != 0)
 	{
 		return mouse_click(&ev);
 	}
