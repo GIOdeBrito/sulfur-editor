@@ -328,6 +328,76 @@ static HlClass editor_map_class(Line *line, size_t row)
 	return best;
 }
 
+static void editor_map_coverage(Line *line, int view_cols, int covered[MAP_CONTENT_WIDTH])
+{
+	size_t limit;
+	size_t j;
+	int i;
+
+	for(i = 0; i < MAP_CONTENT_WIDTH; i++)
+	{
+		covered[i] = 0;
+	}
+
+	if(line == NULL || line->data == NULL || line->len == 0)
+	{
+		return;
+	}
+
+	if(view_cols < 1)
+	{
+		return;
+	}
+
+	limit = line->len;
+
+	if(limit > (size_t)view_cols)
+	{
+		limit = (size_t)view_cols;
+	}
+
+	for(j = 0; j < limit; j++)
+	{
+		char c;
+		int owner;
+
+		c = line->data[j];
+
+		if(c == ' ' || c == '\t')
+		{
+			continue;
+		}
+
+		owner = (int)((j * (size_t)MAP_CONTENT_WIDTH) / (size_t)view_cols);
+
+		if(owner < 0)
+		{
+			owner = 0;
+		}
+
+		if(owner >= MAP_CONTENT_WIDTH)
+		{
+			owner = MAP_CONTENT_WIDTH - 1;
+		}
+
+		covered[owner] = 1;
+	}
+
+	if(line->len <= (size_t)view_cols)
+	{
+		return;
+	}
+
+	for(j = (size_t)view_cols; j < line->len; j++)
+	{
+		if(line->data[j] != ' ' && line->data[j] != '\t')
+		{
+			covered[MAP_CONTENT_WIDTH - 1] = 1;
+			return;
+		}
+	}
+}
+
 static void editor_draw_map(void)
 {
 	int view_rows;
@@ -360,7 +430,8 @@ static void editor_draw_map(void)
 		size_t max_len;
 		size_t max_row;
 		size_t cursor_row;
-		int fill;
+		int covered[MAP_CONTENT_WIDTH];
+		int has_cover;
 		int in_view;
 		int is_cursor;
 		int i;
@@ -398,17 +469,16 @@ static void editor_draw_map(void)
 			}
 		}
 
-		if(max_len == 0)
-		{
-			fill = 0;
-		}
-		else
-		{
-			fill = 1 + (int)((2 * max_len) / (size_t)view_cols);
+		editor_map_coverage(&g_editor.lines[max_row], view_cols, covered);
 
-			if(fill > MAP_CONTENT_WIDTH)
+		has_cover = 0;
+
+		for(i = 0; i < MAP_CONTENT_WIDTH; i++)
+		{
+			if(covered[i] != 0)
 			{
-				fill = MAP_CONTENT_WIDTH;
+				has_cover = 1;
+				break;
 			}
 		}
 
@@ -435,7 +505,7 @@ static void editor_draw_map(void)
 
 		tint_attr = A_NORMAL;
 
-		if(fill > 0)
+		if(has_cover != 0)
 		{
 			tint_attr = highlight_attr(editor_map_class(&g_editor.lines[max_row], max_row));
 		}
@@ -444,7 +514,7 @@ static void editor_draw_map(void)
 		{
 			int attr;
 
-			if(i < fill)
+			if(covered[i] != 0)
 			{
 				attr = tint_attr | A_REVERSE;
 
