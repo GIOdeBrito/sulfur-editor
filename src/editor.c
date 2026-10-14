@@ -6,6 +6,7 @@
 #include "editor.h"
 #include "highlight.h"
 #include "line.h"
+#include "undo.h"
 #include "util.h"
 #include "view.h"
 
@@ -38,6 +39,7 @@ void editor_init(void)
 	g_editor.trailing_nl = 0;
 	g_editor.filetype = HL_PLAIN;
 	complete_reset();
+	undo_reset();
 }
 
 void editor_free(void)
@@ -54,6 +56,7 @@ void editor_free(void)
 	g_editor.num_lines = 0;
 	g_editor.line_cap = 0;
 	highlight_free();
+	undo_free();
 }
 
 void editor_set_status(const char *msg)

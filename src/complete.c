@@ -5,7 +5,9 @@
 #include "complete.h"
 #include "edit.h"
 #include "editor.h"
+#include "highlight.h"
 #include "line.h"
+#include "undo.h"
 #include "view.h"
 
 #define COMPLETE_MIN_PREFIX 2
@@ -299,6 +301,7 @@ void complete_accept(void)
 	memcpy(candidate, s_complete.items[s_complete.selected], sizeof(candidate));
 	candidate_len = strlen(candidate);
 	prefix_len = g_editor.cx - s_complete.prefix_start;
+	undo_begin(UNDO_OTHER);
 	line_ensure_cap(line, line->len - prefix_len + candidate_len + 1);
 	memmove(&line->data[s_complete.prefix_start + candidate_len], &line->data[g_editor.cx], line->len - g_editor.cx + 1);
 	memcpy(&line->data[s_complete.prefix_start], candidate, candidate_len);
@@ -306,6 +309,8 @@ void complete_accept(void)
 	g_editor.cx = s_complete.prefix_start + candidate_len;
 	g_editor.want_cx = g_editor.cx;
 	g_editor.dirty = 1;
+	highlight_mark_dirty();
+	undo_end(UNDO_OTHER);
 	complete_reset();
 }
 

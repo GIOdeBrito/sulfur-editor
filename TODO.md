@@ -17,8 +17,6 @@ Ideas for future work, roughly ordered by value/effort.
 - Matching-bracket jump (`%` or `Ctrl-]`) using the C highlighter state
 
 ## Quality of life
-- Undo/redo (`Ctrl-Z`/`Ctrl-Y`): snapshot or op-based, cap history size
-- Line numbers toggle, visible-whitespace toggle
 - Word wrap toggle (soft wrap, no buffer change)
 - Auto-save on focus loss / periodic backup file (`.#name` + restore prompt)
 

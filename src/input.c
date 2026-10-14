@@ -8,6 +8,7 @@
 #include "editor.h"
 #include "input.h"
 #include "mouse.h"
+#include "undo.h"
 #include "view.h"
 
 int editor_prompt_filename(void)
@@ -115,6 +116,18 @@ int editor_handle_key(int key)
 		}
 
 		editor_save();
+		return 0;
+	}
+
+	if(key == CTRL_KEY('z'))
+	{
+		undo_undo();
+		return 0;
+	}
+
+	if(key == CTRL_KEY('y'))
+	{
+		undo_redo();
 		return 0;
 	}
 

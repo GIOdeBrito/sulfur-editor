@@ -13,7 +13,7 @@ C11 ncurses text editor. Single binary, no test framework, no CI.
 ## Layout (`src/` + `include/`, global `Editor g_editor` in `editor.h`)
 
 - `main.c`: `editor_init → editor_open → editor_start_screen → editor_run → editor_free`.
-- `editor.c`: init/free, `editor_clamp_cursor`, selection helpers. `line.c`/`util.c`: line-buffer growth + `die`. `buffer.c`: open/save, EOL detection/preservation. `edit.c`: mutations + cursor moves. `view.c`: scroll/gutter/draw. `input.c`: keys + prompts + `editor_run` loop (clamp + `editor_scroll` + draw per frame). `screen.c`: ncurses/termios init. `complete.c` / `highlight.c` / `mouse.c`: features.
+- `editor.c`: init/free, `editor_clamp_cursor`, selection helpers. `line.c`/`util.c`: line-buffer growth + `die`. `buffer.c`: open/save, EOL detection/preservation. `edit.c`: mutations + cursor moves. `view.c`: scroll/gutter/draw. `input.c`: keys + prompts + `editor_run` loop (clamp + `editor_scroll` + draw per frame). `screen.c`: ncurses/termios init. `complete.c` / `highlight.c` / `mouse.c` / `undo.c`: features.
 - Style (enforced): tabs, Allman braces, guard clauses, `NULL` uppercase.
 
 ## Invariants agents commonly break
@@ -35,6 +35,7 @@ C11 ncurses text editor. Single binary, no test framework, no CI.
 - Select: `sel_active`/`sel_ax`/`sel_ay` anchor in `Editor`, active end is `cx`/`cy`, end-exclusive; Backspace/Del delete the range (multi-line joins head+tail, never drops below 1 line), typing/`Enter` replace it, `Tab` block-indents touched lines (`ex==0` excludes the last line) and keeps the selection shifted; plain moves, mouse clicks, and completion-accept only clear. Both plain and color draw paths split runs with `A_REVERSE`.
 - Keys: ncurses has **no** `KEY_SUP`/`KEY_SDOWN` — Shift+Up/Down arrive via `kri`/`kind` as `KEY_SR`/`KEY_SF`; Shift+arrows/Home/End are `KEY_SLEFT`/`SRIGHT`/`SHOME`/`SSEND`, Shift+PgUp/PgDn are `KEY_SPREVIOUS`/`KEY_SNEXT`. Shift+Tab is `KEY_BTAB` → unindent (block over selection, else current line); there is deliberately **no** Ctrl+Tab binding (no standard encoding — plain xterm sends bare `0x09`).
 - Page: `KEY_PPAGE`/`KEY_NPAGE` move exactly `LINES-2` rows, clamped to `editor_max_cy()`, `row_off` follows via per-frame `editor_scroll()` in `editor_run` (not inside `editor_move_page`).
+- Undo: `Ctrl-Z`/`Ctrl-Y`; full-buffer snapshots (content + cursor + selection + `dirty`) capped at 64, any new edit clears redo; consecutive char inserts/backspaces coalesce via `undo_begin`/`undo_end`; unindent pushes only when it actually strips.
 
 ## Verification (headless pty, no fixtures)
 

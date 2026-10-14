@@ -7,6 +7,7 @@
 #include "editor.h"
 #include "highlight.h"
 #include "line.h"
+#include "undo.h"
 #include "view.h"
 
 int editor_delete_selection(void)
@@ -197,6 +198,7 @@ void editor_unindent(void)
 		size_t ex;
 		size_t last;
 		size_t row;
+		int pushed;
 
 		editor_selection_range(&sy, &sx, &ey, &ex);
 
@@ -214,11 +216,27 @@ void editor_unindent(void)
 				last = ey - 1;
 			}
 
+			pushed = 0;
+
 			for(row = sy; row <= last; row++)
 			{
+				Line *target;
 				size_t stripped;
 
-				stripped = editor_strip_leading(&g_editor.lines[row], (size_t)TAB_WIDTH);
+				target = &g_editor.lines[row];
+
+				if(target->data == NULL || target->len == 0 || target->data[0] != ' ')
+				{
+					continue;
+				}
+
+				if(pushed == 0)
+				{
+					undo_begin(UNDO_OTHER);
+					pushed = 1;
+				}
+
+				stripped = editor_strip_leading(target, (size_t)TAB_WIDTH);
 
 				if(stripped == 0)
 				{
@@ -253,8 +271,14 @@ void editor_unindent(void)
 			}
 
 			(void)sx;
-			g_editor.dirty = 1;
-			highlight_mark_dirty();
+
+			if(pushed != 0)
+			{
+				g_editor.dirty = 1;
+				highlight_mark_dirty();
+				undo_end(UNDO_OTHER);
+			}
+
 			return;
 		}
 
@@ -272,10 +296,17 @@ void editor_unindent(void)
 			return;
 		}
 
+		if(line->data == NULL || line->len == 0 || line->data[0] != ' ')
+		{
+			return;
+		}
+
+		undo_begin(UNDO_OTHER);
 		stripped = editor_strip_leading(line, (size_t)TAB_WIDTH);
 
 		if(stripped == 0)
 		{
+			undo_end(UNDO_OTHER);
 			return;
 		}
 
@@ -291,6 +322,7 @@ void editor_unindent(void)
 		g_editor.want_cx = g_editor.cx;
 		g_editor.dirty = 1;
 		highlight_mark_dirty();
+		undo_end(UNDO_OTHER);
 	}
 }
 
@@ -298,9 +330,27 @@ void editor_insert_char(char c)
 {
 	Line *line;
 	int i;
+	int kind;
+
+	if(g_editor.sel_active != 0)
+	{
+		kind = UNDO_OTHER;
+	}
+	else
+	{
+		if(editor_current_line() == NULL)
+		{
+			return;
+		}
+
+		kind = UNDO_INSERT;
+	}
+
+	undo_begin(kind);
 
 	if(c == '\t' && editor_indent_selection() != 0)
 	{
+		undo_end(kind);
 		return;
 	}
 
@@ -309,6 +359,7 @@ void editor_insert_char(char c)
 
 	if(line == NULL)
 	{
+		undo_end(kind);
 		return;
 	}
 
@@ -323,6 +374,7 @@ void editor_insert_char(char c)
 		g_editor.dirty = 1;
 		g_editor.want_cx = g_editor.cx;
 		highlight_mark_dirty();
+		undo_end(kind);
 		return;
 	}
 
@@ -331,6 +383,7 @@ void editor_insert_char(char c)
 	g_editor.dirty = 1;
 	g_editor.want_cx = g_editor.cx;
 	highlight_mark_dirty();
+	undo_end(kind);
 }
 
 void editor_insert_newline(void)
@@ -340,11 +393,18 @@ void editor_insert_newline(void)
 	size_t tail_len;
 	size_t indent;
 
+	if(g_editor.sel_active == 0 && editor_current_line() == NULL)
+	{
+		return;
+	}
+
+	undo_begin(UNDO_OTHER);
 	editor_delete_selection();
 	line = editor_current_line();
 
 	if(line == NULL)
 	{
+		undo_end(UNDO_OTHER);
 		return;
 	}
 
@@ -395,6 +455,7 @@ void editor_insert_newline(void)
 	g_editor.want_cx = indent;
 	g_editor.dirty = 1;
 	highlight_mark_dirty();
+	undo_end(UNDO_OTHER);
 }
 
 void editor_delete_backspace(void)
@@ -402,9 +463,36 @@ void editor_delete_backspace(void)
 	Line *line;
 	Line *prev;
 	size_t prev_len;
+	int kind;
+
+	if(g_editor.sel_active != 0)
+	{
+		kind = UNDO_OTHER;
+	}
+	else
+	{
+		line = editor_current_line();
+
+		if(line == NULL)
+		{
+			return;
+		}
+
+		if(g_editor.cx > 0)
+		{
+			kind = UNDO_ERASE;
+		}
+		else
+		{
+			kind = UNDO_OTHER;
+		}
+	}
+
+	undo_begin(kind);
 
 	if(editor_delete_selection() != 0)
 	{
+		undo_end(kind);
 		return;
 	}
 
@@ -412,6 +500,7 @@ void editor_delete_backspace(void)
 
 	if(line == NULL)
 	{
+		undo_end(kind);
 		return;
 	}
 
@@ -422,11 +511,13 @@ void editor_delete_backspace(void)
 		g_editor.dirty = 1;
 		g_editor.want_cx = g_editor.cx;
 		highlight_mark_dirty();
+		undo_end(kind);
 		return;
 	}
 
 	if(g_editor.cy == 0)
 	{
+		undo_end(kind);
 		return;
 	}
 
@@ -444,6 +535,7 @@ void editor_delete_backspace(void)
 	g_editor.want_cx = g_editor.cx;
 	g_editor.dirty = 1;
 	highlight_mark_dirty();
+	undo_end(kind);
 }
 
 void editor_delete_char(void)
@@ -451,8 +543,16 @@ void editor_delete_char(void)
 	Line *line;
 	Line *next;
 
+	if(g_editor.sel_active == 0 && editor_current_line() == NULL)
+	{
+		return;
+	}
+
+	undo_begin(UNDO_OTHER);
+
 	if(editor_delete_selection() != 0)
 	{
+		undo_end(UNDO_OTHER);
 		return;
 	}
 
@@ -460,6 +560,7 @@ void editor_delete_char(void)
 
 	if(line == NULL)
 	{
+		undo_end(UNDO_OTHER);
 		return;
 	}
 
@@ -468,11 +569,13 @@ void editor_delete_char(void)
 		line_delete_char(line, g_editor.cx);
 		g_editor.dirty = 1;
 		highlight_mark_dirty();
+		undo_end(UNDO_OTHER);
 		return;
 	}
 
 	if(g_editor.cy + 1 >= g_editor.num_lines)
 	{
+		undo_end(UNDO_OTHER);
 		return;
 	}
 
@@ -486,6 +589,7 @@ void editor_delete_char(void)
 	g_editor.num_lines--;
 	g_editor.dirty = 1;
 	highlight_mark_dirty();
+	undo_end(UNDO_OTHER);
 }
 
 void editor_move_left(int extend)
