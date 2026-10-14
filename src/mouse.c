@@ -28,57 +28,48 @@ void mouse_init(void)
 
 static void mouse_scroll(int direction)
 {
-	int view_rows;
-	size_t max_off;
+	size_t max_cy;
 
-	view_rows = LINES - 2;
-
-	if(view_rows < 1)
-	{
-		view_rows = 1;
-	}
-
-	max_off = 0;
-
-	if(g_editor.num_lines > (size_t)view_rows)
-	{
-		max_off = g_editor.num_lines - (size_t)view_rows;
-	}
+	max_cy = editor_max_cy();
 
 	if(direction < 0)
 	{
-		if(g_editor.row_off <= (size_t)MOUSE_WHEEL_STEP)
+		if(g_editor.cy <= (size_t)MOUSE_WHEEL_STEP)
 		{
-			g_editor.row_off = 0;
+			g_editor.cy = 0;
 		}
 		else
 		{
-			g_editor.row_off -= (size_t)MOUSE_WHEEL_STEP;
+			g_editor.cy -= (size_t)MOUSE_WHEEL_STEP;
 		}
 	}
 	else
 	{
-		g_editor.row_off += (size_t)MOUSE_WHEEL_STEP;
+		g_editor.cy += (size_t)MOUSE_WHEEL_STEP;
 
-		if(g_editor.row_off > max_off)
+		if(g_editor.cy > max_cy)
 		{
-			g_editor.row_off = max_off;
+			g_editor.cy = max_cy;
 		}
 	}
 
-	if(g_editor.cy < g_editor.row_off)
+	if(g_editor.cy >= g_editor.num_lines)
 	{
-		g_editor.cy = g_editor.row_off;
+		g_editor.cx = 0;
 	}
-
-	if(g_editor.cy >= g_editor.row_off + (size_t)view_rows)
+	else
 	{
-		g_editor.cy = g_editor.row_off + (size_t)view_rows - 1;
+		g_editor.cx = g_editor.want_cx;
 	}
 
 	editor_select_clear();
 	editor_clamp_cursor();
-	g_editor.want_cx = g_editor.cx;
+	editor_scroll();
+
+	if(g_editor.cy < g_editor.num_lines)
+	{
+		g_editor.want_cx = g_editor.cx;
+	}
 }
 
 static int mouse_ev_to_cursor(MEVENT *ev)
