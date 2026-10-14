@@ -15,7 +15,7 @@ void mouse_init(void)
 	mmask_t result;
 
 	s_enabled = 0;
-	result = mousemask((mmask_t)(BUTTON1_PRESSED | BUTTON4_PRESSED | BUTTON5_PRESSED), NULL);
+	result = mousemask((mmask_t)(BUTTON1_PRESSED | BUTTON1_RELEASED | BUTTON4_PRESSED | BUTTON5_PRESSED | REPORT_MOUSE_POSITION), NULL);
 
 	if(result == 0)
 	{
@@ -81,6 +81,59 @@ static void mouse_scroll(int direction)
 	g_editor.want_cx = g_editor.cx;
 }
 
+static int mouse_ev_to_cursor(MEVENT *ev)
+{
+	int text_off;
+	int map_w;
+	size_t file_row;
+	size_t want;
+
+	if(ev == NULL)
+	{
+		return 0;
+	}
+
+	if(ev->y < 0 || ev->y >= LINES - 2)
+	{
+		return 0;
+	}
+
+	if(g_editor.num_lines == 0)
+	{
+		return 0;
+	}
+
+	map_w = editor_map_width();
+
+	if(map_w > 0 && ev->x >= COLS - map_w)
+	{
+		return 0;
+	}
+
+	file_row = g_editor.row_off + (size_t)ev->y;
+
+	if(file_row >= g_editor.num_lines)
+	{
+		return 0;
+	}
+
+	text_off = editor_text_offset();
+	g_editor.cy = file_row;
+
+	if(ev->x <= text_off)
+	{
+		g_editor.cx = 0;
+		g_editor.want_cx = 0;
+		return 1;
+	}
+
+	want = g_editor.col_off + (size_t)(ev->x - text_off);
+	g_editor.cx = want;
+	editor_clamp_cursor();
+	g_editor.want_cx = g_editor.cx;
+	return 1;
+}
+
 static int mouse_click(MEVENT *ev)
 {
 	int text_off;
@@ -133,20 +186,62 @@ static int mouse_click(MEVENT *ev)
 
 	text_off = editor_text_offset();
 	g_editor.cy = file_row;
-	editor_select_clear();
-	complete_reset();
 
 	if(ev->x <= text_off)
 	{
 		g_editor.cx = 0;
-		g_editor.want_cx = 0;
-		return 1;
+	}
+	else
+	{
+		want = g_editor.col_off + (size_t)(ev->x - text_off);
+		g_editor.cx = want;
 	}
 
-	want = g_editor.col_off + (size_t)(ev->x - text_off);
-	g_editor.cx = want;
 	editor_clamp_cursor();
 	g_editor.want_cx = g_editor.cx;
+	editor_select_clear();
+	editor_select_mark();
+	complete_reset();
+	return 1;
+}
+
+static int mouse_drag(MEVENT *ev)
+{
+	if(ev == NULL)
+	{
+		return 0;
+	}
+
+	if(g_editor.sel_active == 0)
+	{
+		return 0;
+	}
+
+	if(mouse_ev_to_cursor(ev) == 0)
+	{
+		return 0;
+	}
+
+	return 1;
+}
+
+static int mouse_release(MEVENT *ev)
+{
+	if(g_editor.sel_active == 0)
+	{
+		return 0;
+	}
+
+	if(ev != NULL)
+	{
+		mouse_ev_to_cursor(ev);
+	}
+
+	if(g_editor.cx == g_editor.sel_ax && g_editor.cy == g_editor.sel_ay)
+	{
+		editor_select_clear();
+	}
+
 	return 1;
 }
 
@@ -174,6 +269,16 @@ int mouse_handle(void)
 	{
 		mouse_scroll(1);
 		return 1;
+	}
+
+	if((ev.bstate & BUTTON1_RELEASED) != 0)
+	{
+		return mouse_release(&ev);
+	}
+
+	if((ev.bstate & REPORT_MOUSE_POSITION) != 0)
+	{
+		return mouse_drag(&ev);
 	}
 
 	if((ev.bstate & BUTTON1_PRESSED) != 0)
