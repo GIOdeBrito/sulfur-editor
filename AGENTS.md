@@ -21,6 +21,7 @@ C11 ncurses text editor. Single binary, no test framework, no CI.
 - Tabs are stored as spaces (`TAB_WIDTH 4`); byte index == screen cell.
 - EOL: `EolKind` + `trailing_nl` round-trip on save (`MIXED` saves as LF).
 - Cursor: `want_cx` goal column; roam below EOF is bounded by `editor_max_cy()` (`num_lines + view_rows - 2`), typing there is ignored via `NULL` guards, `col_off` is preserved on virtual rows.
+- Enter: new line inherits the split head line's leading spaces (capped at `cx`); cursor lands after the indent.
 - Past-EOF rows draw a bare `ACS_VLINE` separator; gutter numbers are absolute, min width 2.
 - Quit: `Ctrl-Q`/`Ctrl-X` prompt `y`/`n`/`Esc`; `Ctrl-S` saves (prompts filename if unnamed).
 - `screen.c` disables termios `IXON`/`IXOFF` so `Ctrl-S`/`Ctrl-Q` reach the app — don't remove.

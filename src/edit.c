@@ -336,7 +336,9 @@ void editor_insert_char(char c)
 void editor_insert_newline(void)
 {
 	Line *line;
+	Line *fresh;
 	size_t tail_len;
+	size_t indent;
 
 	editor_delete_selection();
 	line = editor_current_line();
@@ -344,6 +346,16 @@ void editor_insert_newline(void)
 	if(line == NULL)
 	{
 		return;
+	}
+
+	indent = 0;
+
+	if(line->data != NULL)
+	{
+		while(indent < line->len && indent < g_editor.cx && line->data[indent] == ' ')
+		{
+			indent++;
+		}
 	}
 
 	tail_len = 0;
@@ -364,8 +376,23 @@ void editor_insert_newline(void)
 	line->len = g_editor.cx;
 	line->data[line->len] = '\0';
 	g_editor.cy++;
-	g_editor.cx = 0;
-	g_editor.want_cx = 0;
+	fresh = editor_current_line();
+
+	if(fresh == NULL)
+	{
+		return;
+	}
+
+	if(indent > 0)
+	{
+		line_ensure_cap(fresh, fresh->len + indent + 1);
+		memmove(&fresh->data[indent], fresh->data, fresh->len + 1);
+		memset(fresh->data, ' ', indent);
+		fresh->len += indent;
+	}
+
+	g_editor.cx = indent;
+	g_editor.want_cx = indent;
 	g_editor.dirty = 1;
 	highlight_mark_dirty();
 }
