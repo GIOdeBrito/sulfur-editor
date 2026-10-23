@@ -4,6 +4,7 @@
 #include "buffer.h"
 #include "editor.h"
 #include "focus.h"
+#include "tabs.h"
 
 void focus_init(void)
 {
@@ -21,17 +22,48 @@ void focus_shutdown(void)
 
 int focus_handle_key(int key)
 {
+	int i;
+	int saved;
+
 	if(key != FOCUS_IN_KEY && key != FOCUS_OUT_KEY)
 	{
 		return 0;
 	}
 
-	if(key == FOCUS_OUT_KEY && g_editor.dirty != 0 && g_editor.filename[0] != '\0')
+	if(key != FOCUS_OUT_KEY)
 	{
-		if(editor_save() == 0)
+		return 1;
+	}
+
+	saved = 0;
+
+	for(i = 0; i < MAX_BUFFERS; i++)
+	{
+		Buffer *b;
+
+		b = tabs_get(i);
+
+		if(b == NULL || b->dirty == 0 || b->filename[0] == '\0')
 		{
-			editor_set_status("Auto-saved");
+			continue;
 		}
+
+		if(editor_save(b) == 0)
+		{
+			saved++;
+		}
+	}
+
+	if(saved == 1)
+	{
+		editor_set_status("Auto-saved");
+	}
+	else if(saved > 1)
+	{
+		char msg[STATUS_LIMIT];
+
+		snprintf(msg, sizeof(msg), "Auto-saved %d buffers", saved);
+		editor_set_status(msg);
 	}
 
 	return 1;

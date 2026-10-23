@@ -4,7 +4,7 @@ LDLIBS = -lncursesw
 SRC = src
 INC = include
 BLD = build
-OBJS = $(BLD)/main.o $(BLD)/line.o $(BLD)/util.o $(BLD)/editor.o $(BLD)/buffer.o $(BLD)/edit.o $(BLD)/view.o $(BLD)/input.o $(BLD)/screen.o $(BLD)/complete.o $(BLD)/highlight.o $(BLD)/mouse.o $(BLD)/undo.o $(BLD)/search.o $(BLD)/focus.o $(BLD)/palette.o $(BLD)/clipboard.o $(BLD)/explorer.o
+OBJS = $(BLD)/main.o $(BLD)/line.o $(BLD)/util.o $(BLD)/editor.o $(BLD)/buffer.o $(BLD)/edit.o $(BLD)/view.o $(BLD)/input.o $(BLD)/screen.o $(BLD)/complete.o $(BLD)/highlight.o $(BLD)/mouse.o $(BLD)/undo.o $(BLD)/search.o $(BLD)/focus.o $(BLD)/palette.o $(BLD)/clipboard.o $(BLD)/explorer.o $(BLD)/tabs.o
 
 all: $(BLD)/sulf
 
@@ -31,7 +31,8 @@ $(BLD)/search.o: $(SRC)/search.c $(INC)/search.h $(INC)/common.h $(INC)/complete
 $(BLD)/focus.o: $(SRC)/focus.c $(INC)/focus.h $(INC)/buffer.h $(INC)/editor.h
 $(BLD)/palette.o: $(SRC)/palette.c $(INC)/palette.h $(INC)/buffer.h $(INC)/clipboard.h $(INC)/common.h $(INC)/complete.h $(INC)/edit.h $(INC)/editor.h $(INC)/explorer.h $(INC)/input.h $(INC)/search.h $(INC)/undo.h
 $(BLD)/clipboard.o: $(SRC)/clipboard.c $(INC)/clipboard.h $(INC)/buffer.h $(INC)/common.h $(INC)/edit.h $(INC)/editor.h $(INC)/highlight.h $(INC)/line.h $(INC)/search.h $(INC)/undo.h
-$(BLD)/explorer.o: $(SRC)/explorer.c $(INC)/explorer.h $(INC)/buffer.h $(INC)/common.h $(INC)/complete.h $(INC)/editor.h $(INC)/input.h $(INC)/line.h $(INC)/palette.h $(INC)/search.h
+$(BLD)/explorer.o: $(SRC)/explorer.c $(INC)/explorer.h $(INC)/buffer.h $(INC)/common.h $(INC)/complete.h $(INC)/editor.h $(INC)/input.h $(INC)/line.h $(INC)/palette.h $(INC)/search.h $(INC)/tabs.h
+$(BLD)/tabs.o: $(SRC)/tabs.c $(INC)/tabs.h $(INC)/buffer.h $(INC)/common.h $(INC)/complete.h $(INC)/editor.h $(INC)/search.h $(INC)/undo.h $(INC)/view.h
 
 $(BLD):
 	mkdir -p $(BLD)

@@ -11,10 +11,11 @@
 #include "input.h"
 #include "palette.h"
 #include "search.h"
+#include "tabs.h"
 #include "undo.h"
 
 #define PALETTE_MAX_QUERY 64
-#define PALETTE_MAX_ITEMS 17
+#define PALETTE_MAX_ITEMS 20
 #define PALETTE_MAX_VISIBLE 8
 #define PALETTE_MODAL_CONTENT 40
 
@@ -36,7 +37,10 @@ typedef enum
 	PAL_COPY,
 	PAL_CUT,
 	PAL_PASTE,
-	PAL_COMPLETE_WORD
+	PAL_COMPLETE_WORD,
+	PAL_NEXT_BUFFER,
+	PAL_PREV_BUFFER,
+	PAL_CLOSE_BUFFER
 } PaletteAction;
 
 typedef struct
@@ -63,7 +67,10 @@ static const PaletteItem s_table[] =
 	{ "Copy", PAL_COPY },
 	{ "Cut", PAL_CUT },
 	{ "Paste", PAL_PASTE },
-	{ "Complete Word", PAL_COMPLETE_WORD }
+	{ "Complete Word", PAL_COMPLETE_WORD },
+	{ "Next Buffer", PAL_NEXT_BUFFER },
+	{ "Previous Buffer", PAL_PREV_BUFFER },
+	{ "Close Buffer", PAL_CLOSE_BUFFER }
 };
 
 #define PALETTE_TABLE_COUNT ((int)(sizeof(s_table) / sizeof(s_table[0])))
@@ -143,7 +150,15 @@ static void palette_refilter(void)
 
 void palette_open(void)
 {
-	complete_reset();
+	Buffer *b;
+
+	b = tabs_active();
+
+	if(b != NULL)
+	{
+		complete_reset(b);
+	}
+
 	search_deactivate();
 	explorer_reset();
 	s_palette.active = 1;
@@ -203,6 +218,17 @@ static void palette_move(int delta)
 static int palette_run_selected(void)
 {
 	PaletteAction action;
+	Buffer *b;
+	View *v;
+
+	b = tabs_active();
+	v = tabs_view();
+
+	if(b == NULL || v == NULL)
+	{
+		palette_reset();
+		return 0;
+	}
 
 	if(s_palette.count == 0)
 	{
@@ -217,24 +243,24 @@ static int palette_run_selected(void)
 
 	action = s_table[s_palette.filtered[s_palette.selected]].action;
 	palette_reset();
-	complete_reset();
+	complete_reset(b);
 	search_deactivate();
 
 	if(action == PAL_SAVE)
 	{
-		if(g_editor.filename[0] == '\0')
+		if(b->filename[0] == '\0')
 		{
-			editor_prompt_filename();
+			editor_prompt_filename(b);
 			return 0;
 		}
 
-		editor_save();
+		editor_save(b);
 		return 0;
 	}
 
 	if(action == PAL_SAVE_AS)
 	{
-		editor_prompt_filename();
+		editor_prompt_filename(b);
 		return 0;
 	}
 
@@ -245,9 +271,9 @@ static int palette_run_selected(void)
 
 	if(action == PAL_OPEN_FILE)
 	{
-		if(g_editor.filename[0] != '\0')
+		if(b->filename[0] != '\0')
 		{
-			explorer_open(g_editor.filename);
+			explorer_open(b->filename);
 		}
 		else
 		{
@@ -257,9 +283,39 @@ static int palette_run_selected(void)
 		return 0;
 	}
 
+	if(action == PAL_NEXT_BUFFER)
+	{
+		if(tabs_next() != 0)
+		{
+			editor_set_status("Buffer switched");
+		}
+
+		return 0;
+	}
+
+	if(action == PAL_PREV_BUFFER)
+	{
+		if(tabs_prev() != 0)
+		{
+			editor_set_status("Buffer switched");
+		}
+
+		return 0;
+	}
+
+	if(action == PAL_CLOSE_BUFFER)
+	{
+		if(tabs_close_current() != 0)
+		{
+			editor_set_status("Buffer closed");
+		}
+
+		return 0;
+	}
+
 	if(action == PAL_FIND)
 	{
-		search_prompt_and_find();
+		search_prompt_and_find(b, v);
 		return 0;
 	}
 
@@ -271,7 +327,7 @@ static int palette_run_selected(void)
 			return 0;
 		}
 
-		search_next(1);
+		search_next(b, v, 1);
 		return 0;
 	}
 
@@ -283,84 +339,84 @@ static int palette_run_selected(void)
 			return 0;
 		}
 
-		search_next(-1);
+		search_next(b, v, -1);
 		return 0;
 	}
 
 	if(action == PAL_UNDO)
 	{
-		undo_undo();
+		undo_undo(b, v);
 		return 0;
 	}
 
 	if(action == PAL_REDO)
 	{
-		undo_redo();
+		undo_redo(b, v);
 		return 0;
 	}
 
 	if(action == PAL_INDENT)
 	{
-		if(g_editor.sel_active == 0)
+		if(v->sel_active == 0)
 		{
 			editor_set_status("No selection");
 			return 0;
 		}
 
-		undo_begin(UNDO_OTHER);
-		editor_indent_selection();
-		undo_end(UNDO_OTHER);
+		undo_begin(b, v, UNDO_OTHER);
+		editor_indent_selection(b, v);
+		undo_end(b, v, UNDO_OTHER);
 		return 0;
 	}
 
 	if(action == PAL_DELETE_SELECTION)
 	{
-		if(g_editor.sel_active == 0)
+		if(v->sel_active == 0)
 		{
 			editor_set_status("No selection");
 			return 0;
 		}
 
-		undo_begin(UNDO_OTHER);
-		editor_delete_selection();
-		undo_end(UNDO_OTHER);
+		undo_begin(b, v, UNDO_OTHER);
+		editor_delete_selection(b, v);
+		undo_end(b, v, UNDO_OTHER);
 		return 0;
 	}
 
 	if(action == PAL_UNINDENT)
 	{
-		editor_unindent();
+		editor_unindent(b, v);
 		return 0;
 	}
 
 	if(action == PAL_CLEAR_SELECTION)
 	{
-		editor_select_clear();
+		editor_select_clear(v);
 		editor_set_status("Selection cleared");
 		return 0;
 	}
 
 	if(action == PAL_COPY)
 	{
-		editor_copy();
+		editor_copy(b, v);
 		return 0;
 	}
 
 	if(action == PAL_CUT)
 	{
-		editor_cut();
+		editor_cut(b, v);
 		return 0;
 	}
 
 	if(action == PAL_PASTE)
 	{
-		editor_paste();
+		editor_paste(b, v);
 		return 0;
 	}
 
 	if(action == PAL_COMPLETE_WORD)
 	{
-		complete_update_forced();
+		complete_update_forced(b, v);
 		return 0;
 	}
 

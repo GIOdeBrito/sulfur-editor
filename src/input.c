@@ -13,15 +13,21 @@
 #include "mouse.h"
 #include "palette.h"
 #include "search.h"
+#include "tabs.h"
 #include "undo.h"
 #include "view.h"
 
-int editor_prompt_filename(void)
+int editor_prompt_filename(Buffer *b)
 {
 	char name[FILENAME_LIMIT];
 	int rows;
 
-	complete_reset();
+	if(b == NULL)
+	{
+		return -1;
+	}
+
+	complete_reset(b);
 	search_deactivate();
 	rows = LINES - 1;
 	echo();
@@ -45,22 +51,15 @@ int editor_prompt_filename(void)
 		return -1;
 	}
 
-	snprintf(g_editor.filename, sizeof(g_editor.filename), "%s", name);
-	return editor_save();
+	snprintf(b->filename, sizeof(b->filename), "%s", name);
+	return editor_save(b);
 }
 
-int editor_request_quit(void)
+static int editor_request_quit_buffer(Buffer *b)
 {
 	int msg_row;
 	int key;
-
-	complete_reset();
-	search_deactivate();
-
-	if(g_editor.dirty == 0)
-	{
-		return 1;
-	}
+	char prompt[STATUS_LIMIT + FILENAME_LIMIT];
 
 	msg_row = LINES - 2;
 
@@ -69,18 +68,27 @@ int editor_request_quit(void)
 		msg_row = 0;
 	}
 
+	if(b->filename[0] != '\0')
+	{
+		snprintf(prompt, sizeof(prompt), "Unsaved changes in %s. Save? (y/n, Esc cancel)", b->filename);
+	}
+	else
+	{
+		snprintf(prompt, sizeof(prompt), "Unsaved changes in [No Name]. Save? (y/n, Esc cancel)");
+	}
+
 	move(msg_row, 0);
 	clrtoeol();
-	mvaddnstr(msg_row, 0, "Unsaved changes. Save? (y/n, Esc cancel)", COLS);
+	mvaddnstr(msg_row, 0, prompt, COLS);
 	refresh();
 	curs_set(1);
 	key = getch();
 
 	if(key == 'y' || key == 'Y')
 	{
-		if(g_editor.filename[0] == '\0')
+		if(b->filename[0] == '\0')
 		{
-			if(editor_prompt_filename() != 0)
+			if(editor_prompt_filename(b) != 0)
 			{
 				return 0;
 			}
@@ -88,7 +96,7 @@ int editor_request_quit(void)
 			return 1;
 		}
 
-		if(editor_save() != 0)
+		if(editor_save(b) != 0)
 		{
 			return 0;
 		}
@@ -105,8 +113,44 @@ int editor_request_quit(void)
 	return 0;
 }
 
+int editor_request_quit(void)
+{
+	Buffer *b;
+	int i;
+
+	b = tabs_active();
+
+	if(b != NULL)
+	{
+		complete_reset(b);
+		search_deactivate();
+	}
+
+	for(i = 0; i < MAX_BUFFERS; i++)
+	{
+		b = tabs_get(i);
+
+		if(b == NULL || b->dirty == 0)
+		{
+			continue;
+		}
+
+		tabs_activate(i);
+
+		if(editor_request_quit_buffer(b) == 0)
+		{
+			return 0;
+		}
+	}
+
+	return 1;
+}
+
 int editor_handle_key(int key)
 {
+	Buffer *b;
+	View *v;
+
 	if(focus_handle_key(key))
 	{
 		return 0;
@@ -114,11 +158,14 @@ int editor_handle_key(int key)
 
 	if(palette_is_active() && key == KEY_F(2))
 	{
-		palette_reset();
+		Buffer *cur;
 
-		if(g_editor.filename[0] != '\0')
+		palette_reset();
+		cur = tabs_active();
+
+		if(cur != NULL && cur->filename[0] != '\0')
 		{
-			explorer_open(g_editor.filename);
+			explorer_open(cur->filename);
 		}
 		else
 		{
@@ -167,27 +214,35 @@ int editor_handle_key(int key)
 		}
 	}
 
+	b = tabs_active();
+	v = tabs_view();
+
+	if(b == NULL || v == NULL)
+	{
+		return 0;
+	}
+
 	if(search_is_active())
 	{
-		if(search_handle_key(key))
+		if(search_handle_key(b, v, key))
 		{
 			return 0;
 		}
 	}
 
-	if(complete_is_active())
+	if(complete_is_active(b))
 	{
-		if(complete_handle_key(key))
+		if(complete_handle_key(b, v, key))
 		{
 			return 0;
 		}
 
-		complete_reset();
+		complete_reset(b);
 	}
 
 	if(key == KEY_MOUSE)
 	{
-		mouse_handle();
+		mouse_handle(b, v);
 		return 0;
 	}
 
@@ -198,49 +253,49 @@ int editor_handle_key(int key)
 
 	if(key == CTRL_KEY('s'))
 	{
-		if(g_editor.filename[0] == '\0')
+		if(b->filename[0] == '\0')
 		{
-			editor_prompt_filename();
+			editor_prompt_filename(b);
 			return 0;
 		}
 
-		editor_save();
+		editor_save(b);
 		return 0;
 	}
 
 	if(key == CTRL_KEY('z'))
 	{
-		undo_undo();
+		undo_undo(b, v);
 		return 0;
 	}
 
 	if(key == CTRL_KEY('y'))
 	{
-		undo_redo();
+		undo_redo(b, v);
 		return 0;
 	}
 
 	if(key == CTRL_KEY('c'))
 	{
-		editor_copy();
+		editor_copy(b, v);
 		return 0;
 	}
 
 	if(key == CTRL_KEY('x'))
 	{
-		editor_cut();
+		editor_cut(b, v);
 		return 0;
 	}
 
 	if(key == CTRL_KEY('v'))
 	{
-		editor_paste();
+		editor_paste(b, v);
 		return 0;
 	}
 
 	if(key == CTRL_KEY('f'))
 	{
-		search_prompt_and_find();
+		search_prompt_and_find(b, v);
 		return 0;
 	}
 
@@ -255,9 +310,9 @@ int editor_handle_key(int key)
 	{
 		palette_reset();
 
-		if(g_editor.filename[0] != '\0')
+		if(b->filename[0] != '\0')
 		{
-			explorer_open(g_editor.filename);
+			explorer_open(b->filename);
 		}
 		else
 		{
@@ -267,39 +322,59 @@ int editor_handle_key(int key)
 		return 0;
 	}
 
+	if(key == CTRL_KEY(']'))
+	{
+		if(tabs_next() != 0)
+		{
+			editor_set_status("Buffer switched");
+		}
+
+		return 0;
+	}
+
+	if(key == CTRL_KEY('^'))
+	{
+		if(tabs_prev() != 0)
+		{
+			editor_set_status("Buffer switched");
+		}
+
+		return 0;
+	}
+
 	if(key == KEY_LEFT)
 	{
-		editor_move_left(0);
+		editor_move_left(b, v, 0);
 		return 0;
 	}
 
 	if(key == KEY_RIGHT)
 	{
-		editor_move_right(0);
+		editor_move_right(b, v, 0);
 		return 0;
 	}
 
 	if(key == KEY_UP)
 	{
-		editor_move_up(0);
+		editor_move_up(b, v, 0);
 		return 0;
 	}
 
 	if(key == KEY_DOWN)
 	{
-		editor_move_down(0);
+		editor_move_down(b, v, 0);
 		return 0;
 	}
 
 	if(key == KEY_SLEFT)
 	{
-		editor_move_left(1);
+		editor_move_left(b, v, 1);
 		return 0;
 	}
 
 	if(key == KEY_SRIGHT)
 	{
-		editor_move_right(1);
+		editor_move_right(b, v, 1);
 		return 0;
 	}
 
@@ -307,85 +382,85 @@ int editor_handle_key(int key)
 	via the kri/kind capabilities as KEY_SR/KEY_SF. */
 	if(key == KEY_SR)
 	{
-		editor_move_up(1);
+		editor_move_up(b, v, 1);
 		return 0;
 	}
 
 	if(key == KEY_SF)
 	{
-		editor_move_down(1);
+		editor_move_down(b, v, 1);
 		return 0;
 	}
 
 	if(key == KEY_PPAGE)
 	{
-		editor_move_page(-1, 0);
+		editor_move_page(b, v, -1, 0);
 		return 0;
 	}
 
 	if(key == KEY_NPAGE)
 	{
-		editor_move_page(1, 0);
+		editor_move_page(b, v, 1, 0);
 		return 0;
 	}
 
 	if(key == KEY_SPREVIOUS)
 	{
-		editor_move_page(-1, 1);
+		editor_move_page(b, v, -1, 1);
 		return 0;
 	}
 
 	if(key == KEY_SNEXT)
 	{
-		editor_move_page(1, 1);
+		editor_move_page(b, v, 1, 1);
 		return 0;
 	}
 
 	if(key == KEY_HOME || key == CTRL_KEY('a'))
 	{
-		editor_line_home(0);
+		editor_line_home(v, 0);
 		return 0;
 	}
 
 	if(key == KEY_END || key == CTRL_KEY('e'))
 	{
-		editor_line_end(0);
+		editor_line_end(b, v, 0);
 		return 0;
 	}
 
 	if(key == KEY_SHOME)
 	{
-		editor_line_home(1);
+		editor_line_home(v, 1);
 		return 0;
 	}
 
 	if(key == KEY_SEND)
 	{
-		editor_line_end(1);
+		editor_line_end(b, v, 1);
 		return 0;
 	}
 
 	if(key == KEY_BTAB)
 	{
-		editor_unindent();
+		editor_unindent(b, v);
 		return 0;
 	}
 
 	if(key == KEY_BACKSPACE || key == 127 || key == CTRL_KEY('h'))
 	{
-		editor_delete_backspace();
+		editor_delete_backspace(b, v);
 		return 0;
 	}
 
 	if(key == KEY_DC)
 	{
-		editor_delete_char();
+		editor_delete_char(b, v);
 		return 0;
 	}
 
 	if(key == '\n' || key == '\r' || key == KEY_ENTER)
 	{
-		editor_insert_newline();
+		editor_insert_newline(b, v);
 		return 0;
 	}
 
@@ -396,20 +471,20 @@ int editor_handle_key(int key)
 
 	if((key >= 32 && key <= 126) || (key >= 128 && key <= 255))
 	{
-		editor_insert_char((char)key);
-		complete_update();
+		editor_insert_char(b, v, (char)key);
+		complete_update(b, v);
 		return 0;
 	}
 
 	if(key == CTRL_KEY(' '))
 	{
-		complete_update_forced();
+		complete_update_forced(b, v);
 		return 0;
 	}
 
 	if(key == '\t')
 	{
-		editor_insert_char('\t');
+		editor_insert_char(b, v, '\t');
 		return 0;
 	}
 
@@ -425,32 +500,43 @@ void editor_run(void)
 
 	while(done == 0)
 	{
+		Buffer *b;
+		View *v;
 		Line *cursor_line;
 		int text_off;
 		int cursor_x;
 		int cursor_row;
 
-		editor_clamp_cursor();
-		editor_scroll();
+		b = tabs_active();
+		v = tabs_view();
+
+		if(b == NULL || v == NULL)
+		{
+			return;
+		}
+
+		editor_clamp_cursor(b, v);
+		editor_scroll(b, v);
 		erase();
-		editor_draw_lines();
+		editor_draw_tabs();
+		editor_draw_lines(b, v);
 		editor_draw_status();
-		complete_draw();
+		complete_draw(b, v);
 		palette_dim_background();
 		palette_draw();
 		explorer_dim_background();
 		explorer_draw();
-		text_off = editor_text_offset();
-		cursor_line = editor_current_line();
+		text_off = editor_text_offset(b);
+		cursor_line = editor_current_line(b, v);
 
 		if(cursor_line == NULL)
 		{
-			cursor_x = text_off + (int)g_editor.cx - (int)g_editor.col_off;
+			cursor_x = text_off + (int)v->cx - (int)v->col_off;
 		}
 		else
 		{
-			cursor_x = text_off + (int)line_cells_upto(cursor_line, g_editor.cx) -
-				(int)line_cells_upto(cursor_line, g_editor.col_off);
+			cursor_x = text_off + (int)line_cells_upto(cursor_line, v->cx) -
+				(int)line_cells_upto(cursor_line, v->col_off);
 		}
 
 		if(cursor_x < text_off)
@@ -476,7 +562,7 @@ void editor_run(void)
 		}
 		else
 		{
-			cursor_row = (int)(g_editor.cy - g_editor.row_off);
+			cursor_row = (int)(v->cy - v->row_off) + VIEW_TOP;
 
 			if(cursor_row >= 0 && cursor_row < LINES && cursor_x >= 0 && cursor_x < COLS)
 			{

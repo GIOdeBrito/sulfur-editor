@@ -11,24 +11,7 @@
 #include "undo.h"
 #include "view.h"
 
-#define COMPLETE_MIN_PREFIX 2
-#define COMPLETE_MAX_WORD 64
-#define COMPLETE_MAX_ITEMS 32
 #define COMPLETE_MAX_VISIBLE 8
-
-typedef struct
-{
-	int active;
-	char prefix[COMPLETE_MAX_WORD];
-	char items[COMPLETE_MAX_ITEMS][COMPLETE_MAX_WORD];
-	int freq[COMPLETE_MAX_ITEMS];
-	int count;
-	int selected;
-	size_t prefix_start;
-	size_t prefix_line;
-} Complete;
-
-static Complete s_complete;
 
 static int is_word_char(int c)
 {
@@ -64,9 +47,17 @@ static size_t prefix_start_of(Line *line, size_t cx)
 	return start;
 }
 
-static void consider_word(const char *word, size_t len, size_t prefix_len)
+static void consider_word(Buffer *b, const char *word, size_t len, size_t prefix_len)
 {
+	CompleteState *c;
 	int i;
+
+	if(b == NULL)
+	{
+		return;
+	}
+
+	c = &b->complete;
 
 	if(len <= prefix_len)
 	{
@@ -78,41 +69,46 @@ static void consider_word(const char *word, size_t len, size_t prefix_len)
 		return;
 	}
 
-	if(memcmp(word, s_complete.prefix, prefix_len) != 0)
+	if(memcmp(word, c->prefix, prefix_len) != 0)
 	{
 		return;
 	}
 
-	for(i = 0; i < s_complete.count; i++)
+	for(i = 0; i < c->count; i++)
 	{
-		if(strlen(s_complete.items[i]) == len && memcmp(s_complete.items[i], word, len) == 0)
+		if(strlen(c->items[i]) == len && memcmp(c->items[i], word, len) == 0)
 		{
-			s_complete.freq[i]++;
+			c->freq[i]++;
 			return;
 		}
 	}
 
-	if(s_complete.count >= COMPLETE_MAX_ITEMS)
+	if(c->count >= COMPLETE_MAX_ITEMS)
 	{
 		return;
 	}
 
-	memcpy(s_complete.items[s_complete.count], word, len);
-	s_complete.items[s_complete.count][len] = '\0';
-	s_complete.freq[s_complete.count] = 1;
-	s_complete.count++;
+	memcpy(c->items[c->count], word, len);
+	c->items[c->count][len] = '\0';
+	c->freq[c->count] = 1;
+	c->count++;
 }
 
-static void collect_candidates(size_t prefix_len)
+static void collect_candidates(Buffer *b, size_t prefix_len)
 {
 	size_t li;
 
-	for(li = 0; li < g_editor.num_lines; li++)
+	if(b == NULL)
+	{
+		return;
+	}
+
+	for(li = 0; li < b->num_lines; li++)
 	{
 		Line *line;
 		size_t i;
 
-		line = &g_editor.lines[li];
+		line = &b->lines[li];
 
 		if(line->data == NULL)
 		{
@@ -138,59 +134,74 @@ static void collect_candidates(size_t prefix_len)
 				j++;
 			}
 
-			consider_word(&line->data[i], j - i, prefix_len);
+			consider_word(b, &line->data[i], j - i, prefix_len);
 			i = j;
 		}
 	}
 }
 
-static void sort_candidates(void)
+static void sort_candidates(Buffer *b)
 {
+	CompleteState *c;
 	int i;
 
-	for(i = 1; i < s_complete.count; i++)
+	if(b == NULL)
+	{
+		return;
+	}
+
+	c = &b->complete;
+
+	for(i = 1; i < c->count; i++)
 	{
 		char word[COMPLETE_MAX_WORD];
 		int freq;
 		int j;
 
-		memcpy(word, s_complete.items[i], sizeof(word));
-		freq = s_complete.freq[i];
+		memcpy(word, c->items[i], sizeof(word));
+		freq = c->freq[i];
 		j = i - 1;
 
-		while(j >= 0 && (s_complete.freq[j] < freq || (s_complete.freq[j] == freq && strcmp(s_complete.items[j], word) > 0)))
+		while(j >= 0 && (c->freq[j] < freq || (c->freq[j] == freq && strcmp(c->items[j], word) > 0)))
 		{
-			memcpy(s_complete.items[j + 1], s_complete.items[j], sizeof(word));
-			s_complete.freq[j + 1] = s_complete.freq[j];
+			memcpy(c->items[j + 1], c->items[j], sizeof(word));
+			c->freq[j + 1] = c->freq[j];
 			j--;
 		}
 
-		memcpy(s_complete.items[j + 1], word, sizeof(word));
-		s_complete.freq[j + 1] = freq;
+		memcpy(c->items[j + 1], word, sizeof(word));
+		c->freq[j + 1] = freq;
 	}
 }
 
-static void rebuild(size_t min_len)
+static void rebuild(Buffer *b, View *v, size_t min_len)
 {
+	CompleteState *c;
 	Line *line;
 	size_t start;
 	size_t len;
 
-	complete_reset();
-	line = editor_current_line();
+	if(b == NULL || v == NULL)
+	{
+		return;
+	}
+
+	complete_reset(b);
+	c = &b->complete;
+	line = editor_current_line(b, v);
 
 	if(line == NULL || line->data == NULL)
 	{
 		return;
 	}
 
-	if(g_editor.cx > line->len)
+	if(v->cx > line->len)
 	{
 		return;
 	}
 
-	start = prefix_start_of(line, g_editor.cx);
-	len = g_editor.cx - start;
+	start = prefix_start_of(line, v->cx);
+	len = v->cx - start;
 
 	if(len < min_len)
 	{
@@ -199,176 +210,209 @@ static void rebuild(size_t min_len)
 
 	if(len >= COMPLETE_MAX_WORD)
 	{
-		start = g_editor.cx - (COMPLETE_MAX_WORD - 1);
+		start = v->cx - (COMPLETE_MAX_WORD - 1);
 		len = COMPLETE_MAX_WORD - 1;
 	}
 
-	memcpy(s_complete.prefix, &line->data[start], len);
-	s_complete.prefix[len] = '\0';
-	s_complete.prefix_start = start;
-	s_complete.prefix_line = g_editor.cy;
-	s_complete.count = 0;
-	s_complete.selected = 0;
-	collect_candidates(len);
+	memcpy(c->prefix, &line->data[start], len);
+	c->prefix[len] = '\0';
+	c->prefix_start = start;
+	c->prefix_line = v->cy;
+	c->count = 0;
+	c->selected = 0;
+	collect_candidates(b, len);
 
-	if(s_complete.count == 0)
+	if(c->count == 0)
 	{
-		complete_reset();
+		complete_reset(b);
 		return;
 	}
 
-	sort_candidates();
-	s_complete.active = 1;
+	sort_candidates(b);
+	c->active = 1;
 }
 
-void complete_reset(void)
+void complete_reset(Buffer *b)
 {
-	s_complete.active = 0;
-	s_complete.count = 0;
-	s_complete.selected = 0;
-	s_complete.prefix[0] = '\0';
-	s_complete.prefix_start = 0;
-	s_complete.prefix_line = 0;
-}
-
-int complete_is_active(void)
-{
-	return s_complete.active;
-}
-
-void complete_update(void)
-{
-	rebuild(COMPLETE_MIN_PREFIX);
-}
-
-void complete_update_forced(void)
-{
-	rebuild(1);
-}
-
-void complete_move(int delta)
-{
-	if(s_complete.active == 0 || s_complete.count == 0)
+	if(b == NULL)
 	{
 		return;
 	}
 
-	s_complete.selected = (s_complete.selected + delta) % s_complete.count;
+	b->complete.active = 0;
+	b->complete.count = 0;
+	b->complete.selected = 0;
+	b->complete.prefix[0] = '\0';
+	b->complete.prefix_start = 0;
+	b->complete.prefix_line = 0;
+}
 
-	if(s_complete.selected < 0)
+int complete_is_active(Buffer *b)
+{
+	if(b == NULL)
 	{
-		s_complete.selected += s_complete.count;
+		return 0;
+	}
+
+	return b->complete.active;
+}
+
+void complete_update(Buffer *b, View *v)
+{
+	rebuild(b, v, COMPLETE_MIN_PREFIX);
+}
+
+void complete_update_forced(Buffer *b, View *v)
+{
+	rebuild(b, v, 1);
+}
+
+void complete_move(Buffer *b, int delta)
+{
+	CompleteState *c;
+
+	if(b == NULL)
+	{
+		return;
+	}
+
+	c = &b->complete;
+
+	if(c->active == 0 || c->count == 0)
+	{
+		return;
+	}
+
+	c->selected = (c->selected + delta) % c->count;
+
+	if(c->selected < 0)
+	{
+		c->selected += c->count;
 	}
 }
 
-void complete_accept(void)
+void complete_accept(Buffer *b, View *v)
 {
+	CompleteState *c;
 	Line *line;
 	char candidate[COMPLETE_MAX_WORD];
 	size_t candidate_len;
 	size_t prefix_len;
 
-	if(s_complete.active == 0 || s_complete.count == 0)
+	if(b == NULL || v == NULL)
 	{
 		return;
 	}
 
-	if(s_complete.selected < 0 || s_complete.selected >= s_complete.count)
+	c = &b->complete;
+
+	if(c->active == 0 || c->count == 0)
 	{
-		s_complete.selected = 0;
+		return;
 	}
 
-	editor_select_clear();
+	if(c->selected < 0 || c->selected >= c->count)
+	{
+		c->selected = 0;
+	}
+
+	editor_select_clear(v);
 	search_deactivate();
-	line = editor_current_line();
+	line = editor_current_line(b, v);
 
 	if(line == NULL || line->data == NULL)
 	{
-		complete_reset();
+		complete_reset(b);
 		return;
 	}
 
-	if(s_complete.prefix_line != g_editor.cy)
+	if(c->prefix_line != v->cy)
 	{
-		complete_reset();
+		complete_reset(b);
 		return;
 	}
 
-	if(s_complete.prefix_start > g_editor.cx || g_editor.cx > line->len)
+	if(c->prefix_start > v->cx || v->cx > line->len)
 	{
-		complete_reset();
+		complete_reset(b);
 		return;
 	}
 
-	memcpy(candidate, s_complete.items[s_complete.selected], sizeof(candidate));
+	memcpy(candidate, c->items[c->selected], sizeof(candidate));
 	candidate_len = strlen(candidate);
-	prefix_len = g_editor.cx - s_complete.prefix_start;
-	undo_begin(UNDO_OTHER);
+	prefix_len = v->cx - c->prefix_start;
+	undo_begin(b, v, UNDO_OTHER);
 	line_ensure_cap(line, line->len - prefix_len + candidate_len + 1);
-	memmove(&line->data[s_complete.prefix_start + candidate_len], &line->data[g_editor.cx], line->len - g_editor.cx + 1);
-	memcpy(&line->data[s_complete.prefix_start], candidate, candidate_len);
+	memmove(&line->data[c->prefix_start + candidate_len], &line->data[v->cx], line->len - v->cx + 1);
+	memcpy(&line->data[c->prefix_start], candidate, candidate_len);
 	line->len = line->len - prefix_len + candidate_len;
-	g_editor.cx = s_complete.prefix_start + candidate_len;
+	v->cx = c->prefix_start + candidate_len;
 
-	if(g_editor.cx >= line->len || line->data[g_editor.cx] != ' ')
+	if(v->cx >= line->len || line->data[v->cx] != ' ')
 	{
-		line_insert_char(line, g_editor.cx, ' ');
-		g_editor.cx++;
+		line_insert_char(line, v->cx, ' ');
+		v->cx++;
 	}
 
-	g_editor.want_cx = g_editor.cx;
-	g_editor.dirty = 1;
-	highlight_mark_dirty();
-	undo_end(UNDO_OTHER);
-	complete_reset();
+	v->want_cx = v->cx;
+	b->dirty = 1;
+	highlight_mark_dirty(b);
+	undo_end(b, v, UNDO_OTHER);
+	complete_reset(b);
 }
 
-int complete_handle_key(int key)
+int complete_handle_key(Buffer *b, View *v, int key)
 {
+	if(b == NULL || v == NULL)
+	{
+		return 0;
+	}
+
 	if(key == KEY_UP || key == CTRL_KEY('p'))
 	{
-		complete_move(-1);
+		complete_move(b, -1);
 		return 1;
 	}
 
 	if(key == KEY_DOWN || key == CTRL_KEY('n'))
 	{
-		complete_move(1);
+		complete_move(b, 1);
 		return 1;
 	}
 
 	if(key == '\t' || key == KEY_ENTER || key == '\n' || key == '\r')
 	{
-		complete_accept();
+		complete_accept(b, v);
 		return 1;
 	}
 
 	if(key == 27)
 	{
-		complete_reset();
+		complete_reset(b);
 		editor_set_status("Completion cancelled");
 		return 1;
 	}
 
 	if(key == KEY_BACKSPACE || key == 127 || key == CTRL_KEY('h'))
 	{
-		editor_delete_backspace();
-		complete_update();
+		editor_delete_backspace(b, v);
+		complete_update(b, v);
 		return 1;
 	}
 
 	if(key >= 32 && key <= 126 && is_word_char(key))
 	{
-		editor_insert_char((char)key);
-		complete_update();
+		editor_insert_char(b, v, (char)key);
+		complete_update(b, v);
 		return 1;
 	}
 
 	return 0;
 }
 
-void complete_draw(void)
+void complete_draw(Buffer *b, View *v)
 {
+	CompleteState *c;
 	Line *line;
 	int text_x;
 	int cursor_y;
@@ -381,14 +425,21 @@ void complete_draw(void)
 	int i;
 	int r;
 
-	if(s_complete.active == 0 || s_complete.count == 0)
+	if(b == NULL || v == NULL)
 	{
 		return;
 	}
 
-	if(s_complete.prefix_line != g_editor.cy)
+	c = &b->complete;
+
+	if(c->active == 0 || c->count == 0)
 	{
-		complete_reset();
+		return;
+	}
+
+	if(c->prefix_line != v->cy)
+	{
+		complete_reset(b);
 		return;
 	}
 
@@ -397,7 +448,7 @@ void complete_draw(void)
 		return;
 	}
 
-	visible = s_complete.count;
+	visible = c->count;
 
 	if(visible > COMPLETE_MAX_VISIBLE)
 	{
@@ -406,12 +457,12 @@ void complete_draw(void)
 
 	start = 0;
 
-	if(s_complete.selected >= visible)
+	if(c->selected >= visible)
 	{
-		start = s_complete.selected - visible + 1;
+		start = c->selected - visible + 1;
 	}
 
-	line = editor_current_line();
+	line = editor_current_line(b, v);
 
 	if(line == NULL)
 	{
@@ -424,7 +475,7 @@ void complete_draw(void)
 	{
 		int w;
 
-		w = utf8_width_n(s_complete.items[start + i], strlen(s_complete.items[start + i]));
+		w = utf8_width_n(c->items[start + i], strlen(c->items[start + i]));
 
 		if(w > width)
 		{
@@ -439,10 +490,10 @@ void complete_draw(void)
 		return;
 	}
 
-	text_x = editor_text_offset();
-	cursor_y = (int)g_editor.cy - (int)g_editor.row_off;
-	x = text_x + (int)line_cells_upto(line, s_complete.prefix_start) -
-		(int)line_cells_upto(line, g_editor.col_off);
+	text_x = editor_text_offset(b);
+	cursor_y = (int)v->cy - (int)v->row_off + VIEW_TOP;
+	x = text_x + (int)line_cells_upto(line, c->prefix_start) -
+		(int)line_cells_upto(line, v->col_off);
 
 	if(x < text_x)
 	{
@@ -467,7 +518,7 @@ void complete_draw(void)
 		y = cursor_y - height;
 	}
 
-	if(y < 0)
+	if(y < VIEW_TOP)
 	{
 		return;
 	}
@@ -493,16 +544,16 @@ void complete_draw(void)
 		}
 
 		mvaddch(y + 1 + r, x + width + 1, ACS_VLINE);
-		selected = (start + r == s_complete.selected);
+		selected = (start + r == c->selected);
 
 		if(selected)
 		{
 			attron(A_REVERSE);
 		}
 
-		mvaddnstr(y + 1 + r, x + 1, s_complete.items[start + r],
-			(int)utf8_fit_cells(s_complete.items[start + r],
-				strlen(s_complete.items[start + r]), width));
+		mvaddnstr(y + 1 + r, x + 1, c->items[start + r],
+			(int)utf8_fit_cells(c->items[start + r],
+				strlen(c->items[start + r]), width));
 
 		if(selected)
 		{

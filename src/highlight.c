@@ -26,11 +26,8 @@ static const char *s_keywords[] =
 	"NULL", "true", "false"
 };
 
-static unsigned char *s_state;
-static size_t s_state_cap;
 static unsigned char *s_scratch;
 static size_t s_scratch_cap;
-static int s_dirty;
 static int s_color;
 
 static int is_alpha_underscore(int c)
@@ -73,24 +70,29 @@ static int is_keyword(const char *word, size_t len)
 	return 0;
 }
 
-static void grow_state(size_t needed)
+static void grow_state(Buffer *b, size_t needed)
 {
 	unsigned char *grown;
 
-	if(needed <= s_state_cap)
+	if(b == NULL)
 	{
 		return;
 	}
 
-	grown = realloc(s_state, needed);
+	if(needed <= b->hl.state_cap)
+	{
+		return;
+	}
+
+	grown = realloc(b->hl.state, needed);
 
 	if(grown == NULL)
 	{
 		die("realloc");
 	}
 
-	s_state = grown;
-	s_state_cap = needed;
+	b->hl.state = grown;
+	b->hl.state_cap = needed;
 }
 
 static void grow_scratch(size_t needed)
@@ -616,16 +618,21 @@ static int scan_md_line(const char *data, size_t len, int in_fence, unsigned cha
 	return 0;
 }
 
-void highlight_set_filetype(void)
+void highlight_set_filetype(Buffer *b)
 {
 	size_t len;
 
-	g_editor.filetype = HL_PLAIN;
-	len = strlen(g_editor.filename);
-
-	if(len >= 3 && strcmp(&g_editor.filename[len - 3], ".md") == 0)
+	if(b == NULL)
 	{
-		g_editor.filetype = HL_MD;
+		return;
+	}
+
+	b->filetype = HL_PLAIN;
+	len = strlen(b->filename);
+
+	if(len >= 3 && strcmp(&b->filename[len - 3], ".md") == 0)
+	{
+		b->filetype = HL_MD;
 		return;
 	}
 
@@ -634,48 +641,58 @@ void highlight_set_filetype(void)
 		return;
 	}
 
-	if(g_editor.filename[len - 2] != '.')
+	if(b->filename[len - 2] != '.')
 	{
 		return;
 	}
 
-	if(g_editor.filename[len - 1] == 'c' || g_editor.filename[len - 1] == 'h')
+	if(b->filename[len - 1] == 'c' || b->filename[len - 1] == 'h')
 	{
-		g_editor.filetype = HL_C;
+		b->filetype = HL_C;
 	}
 }
 
-void highlight_mark_dirty(void)
+void highlight_mark_dirty(Buffer *b)
 {
-	s_dirty = 1;
+	if(b == NULL)
+	{
+		return;
+	}
+
+	b->hl.dirty = 1;
 }
 
-void highlight_ensure(void)
+void highlight_ensure(Buffer *b)
 {
 	size_t i;
 	int in_span;
 
-	if(s_dirty == 0)
+	if(b == NULL)
 	{
 		return;
 	}
 
-	s_dirty = 0;
-
-	if(g_editor.filetype != HL_C && g_editor.filetype != HL_MD)
+	if(b->hl.dirty == 0)
 	{
 		return;
 	}
 
-	grow_state(g_editor.num_lines);
+	b->hl.dirty = 0;
+
+	if(b->filetype != HL_C && b->filetype != HL_MD)
+	{
+		return;
+	}
+
+	grow_state(b, b->num_lines);
 	in_span = 0;
 
-	for(i = 0; i < g_editor.num_lines; i++)
+	for(i = 0; i < b->num_lines; i++)
 	{
 		Line *line;
 
-		s_state[i] = (unsigned char)in_span;
-		line = &g_editor.lines[i];
+		b->hl.state[i] = (unsigned char)in_span;
+		line = &b->lines[i];
 
 		if(line->data == NULL || line->len == 0)
 		{
@@ -684,7 +701,7 @@ void highlight_ensure(void)
 
 		grow_scratch(line->len);
 
-		if(g_editor.filetype == HL_MD)
+		if(b->filetype == HL_MD)
 		{
 			in_span = scan_md_line(line->data, line->len, in_span, s_scratch);
 		}
@@ -695,15 +712,17 @@ void highlight_ensure(void)
 	}
 }
 
-void highlight_free(void)
+void highlight_free(Buffer *b)
 {
-	free(s_state);
-	s_state = NULL;
-	s_state_cap = 0;
-	free(s_scratch);
-	s_scratch = NULL;
-	s_scratch_cap = 0;
-	s_dirty = 0;
+	if(b == NULL)
+	{
+		return;
+	}
+
+	free(b->hl.state);
+	b->hl.state = NULL;
+	b->hl.state_cap = 0;
+	b->hl.dirty = 0;
 }
 
 void highlight_init_color(void)
@@ -765,22 +784,27 @@ int highlight_attr(HlClass cls)
 	return A_NORMAL;
 }
 
-const unsigned char *highlight_classes(size_t row)
+const unsigned char *highlight_classes(Buffer *b, size_t row)
 {
 	Line *line;
 	int start_in;
 
-	if(g_editor.filetype != HL_C && g_editor.filetype != HL_MD)
+	if(b == NULL)
 	{
 		return NULL;
 	}
 
-	if(row >= g_editor.num_lines)
+	if(b->filetype != HL_C && b->filetype != HL_MD)
 	{
 		return NULL;
 	}
 
-	line = &g_editor.lines[row];
+	if(row >= b->num_lines)
+	{
+		return NULL;
+	}
+
+	line = &b->lines[row];
 
 	if(line->data == NULL || line->len == 0)
 	{
@@ -789,14 +813,14 @@ const unsigned char *highlight_classes(size_t row)
 
 	start_in = 0;
 
-	if(s_state != NULL && row < s_state_cap)
+	if(b->hl.state != NULL && row < b->hl.state_cap)
 	{
-		start_in = s_state[row];
+		start_in = b->hl.state[row];
 	}
 
 	grow_scratch(line->len);
 
-	if(g_editor.filetype == HL_MD)
+	if(b->filetype == HL_MD)
 	{
 		scan_md_line(line->data, line->len, start_in, s_scratch);
 	}

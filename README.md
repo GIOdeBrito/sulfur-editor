@@ -11,7 +11,8 @@ make          # builds build/sulf, zero warnings
 make clean    # wipes build/
 ```
 
-Run as `build/sulf [filename]`.
+Run as `build/sulf [file ...]`. Each file opens in its own tab
+(top row: click a tab or use `Ctrl-]` / `Ctrl-[` to switch).
 
 ## Keys
 
@@ -21,14 +22,15 @@ Run as `build/sulf [filename]`.
 | Shift+Arrows (and friends) | Extend selection |
 | Type / Enter / Backspace / Del | Edit (`Tab` indents, `Shift-Tab` unindents) |
 | `Ctrl-S` | Save (prompts for a name if unnamed) |
-| `Ctrl-Q` | Quit (prompts if unsaved changes) |
+| `Ctrl-Q` | Quit (prompts per unsaved buffer) |
+| `Ctrl-]` / `Ctrl-^` | Next / previous buffer tab |
 | `Ctrl-C` / `Ctrl-X` / `Ctrl-V` | Copy / cut / paste selection |
 | `Ctrl-F`, then `n` / `N` / `Enter` | Find next / previous match, `Esc` cancels |
 | `Ctrl-P` / `F1` | Command palette, `Esc` cancels |
 | `F2` | File explorer, `Esc` cancels |
-| `Ctrl-Z` / `Ctrl-Y` | Undo / redo |
+| `Ctrl-Z` / `Ctrl-Y` | Undo / redo (per buffer) |
 | `Ctrl-Space` | Force completion (`Tab` / `Enter` accept) |
-| Mouse click / wheel | Move cursor / scroll |
+| Mouse click / wheel | Move cursor / scroll / switch tab |
 
 `--help` prints the same list, `--version` prints the version.
 
@@ -44,9 +46,9 @@ Run as `build/sulf [filename]`.
   `C.UTF-8` / `C.utf8` when the environment does not set one) and an
   xterm-compatible terminal for mouse and focus tracking.
 - Saves are atomic (write temp + rename), preserve file mode, and never
-  truncate the original on failure. Losing terminal focus auto-saves named
-  buffers with unsaved changes.
-- Undo keeps up to 64 full-buffer snapshots; typing runs coalesce so one
+  truncate the original on failure. Losing terminal focus auto-saves every
+  named buffer with unsaved changes.
+- Undo keeps up to 64 full-buffer snapshots per buffer; typing runs coalesce so one
   `Ctrl-Z` reverts one typed stretch. Selection edits, indent, completion,
   and palette actions are all undoable.
 - Syntax highlighting covers C (`.c`/`.h`) and Markdown (`.md`).

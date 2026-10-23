@@ -12,4 +12,9 @@
 #define INITIAL_LINE_CAP 16
 #define INITIAL_CHAR_CAP 64
 
+/* Forward declarations for the editor state owned by editor.h.
+Every module operates on these by pointer; tabs.c owns the instances. */
+typedef struct Buffer Buffer;
+typedef struct View View;
+
 #endif

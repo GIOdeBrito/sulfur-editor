@@ -10,29 +10,8 @@
 
 /* Full-buffer snapshots. Simple and uniform across every mutation path
 (selection replace, indent, completion accept); capped so worst-case
-memory stays bounded. Typing runs coalesce via undo_begin/undo_end. */
-#define UNDO_LIMIT 64
-
-typedef struct
-{
-	Line *lines;
-	size_t num_lines;
-	size_t cx;
-	size_t cy;
-	size_t want_cx;
-	int sel_active;
-	size_t sel_ax;
-	size_t sel_ay;
-	int dirty;
-} UndoState;
-
-static UndoState s_undo[UNDO_LIMIT];
-static size_t s_undo_count;
-static UndoState s_redo[UNDO_LIMIT];
-static size_t s_redo_count;
-static int s_kind;
-static size_t s_cy;
-static size_t s_cx;
+memory stays bounded. Typing runs coalesce via undo_begin/undo_end.
+Stacks live in the Buffer so tabs keep independent histories. */
 
 static void undo_copy_lines(Line *dst, const Line *src, size_t n)
 {
@@ -53,7 +32,7 @@ static void undo_copy_lines(Line *dst, const Line *src, size_t n)
 	}
 }
 
-static void undo_state_free(UndoState *state)
+static void undo_state_free(UndoSlot *state)
 {
 	size_t i;
 
@@ -76,57 +55,57 @@ static void undo_state_free(UndoState *state)
 	state->num_lines = 0;
 }
 
-static void undo_state_capture(UndoState *state)
+static void undo_state_capture(Buffer *b, View *v, UndoSlot *state)
 {
-	if(state == NULL)
+	if(b == NULL || v == NULL || state == NULL)
 	{
 		return;
 	}
 
 	undo_state_free(state);
-	state->num_lines = g_editor.num_lines;
-	state->cx = g_editor.cx;
-	state->cy = g_editor.cy;
-	state->want_cx = g_editor.want_cx;
-	state->sel_active = g_editor.sel_active;
-	state->sel_ax = g_editor.sel_ax;
-	state->sel_ay = g_editor.sel_ay;
-	state->dirty = g_editor.dirty;
+	state->num_lines = b->num_lines;
+	state->cx = v->cx;
+	state->cy = v->cy;
+	state->want_cx = v->want_cx;
+	state->sel_active = v->sel_active;
+	state->sel_ax = v->sel_ax;
+	state->sel_ay = v->sel_ay;
+	state->dirty = b->dirty;
 	state->lines = NULL;
 
-	if(g_editor.num_lines == 0)
+	if(b->num_lines == 0)
 	{
 		return;
 	}
 
-	state->lines = malloc(sizeof(Line) * g_editor.num_lines);
+	state->lines = malloc(sizeof(Line) * b->num_lines);
 
 	if(state->lines == NULL)
 	{
 		die("malloc");
 	}
 
-	undo_copy_lines(state->lines, g_editor.lines, g_editor.num_lines);
+	undo_copy_lines(state->lines, b->lines, b->num_lines);
 }
 
-static void undo_state_restore(const UndoState *state)
+static void undo_state_restore(Buffer *b, View *v, const UndoSlot *state)
 {
 	size_t i;
 	size_t cap;
 
-	if(state == NULL)
+	if(b == NULL || v == NULL || state == NULL)
 	{
 		return;
 	}
 
-	for(i = 0; i < g_editor.num_lines; i++)
+	for(i = 0; i < b->num_lines; i++)
 	{
-		line_free(&g_editor.lines[i]);
+		line_free(&b->lines[i]);
 	}
 
-	free(g_editor.lines);
-	g_editor.lines = NULL;
-	g_editor.num_lines = 0;
+	free(b->lines);
+	b->lines = NULL;
+	b->num_lines = 0;
 
 	cap = state->num_lines;
 
@@ -135,28 +114,28 @@ static void undo_state_restore(const UndoState *state)
 		cap = INITIAL_LINE_CAP;
 	}
 
-	g_editor.lines = malloc(sizeof(Line) * cap);
+	b->lines = malloc(sizeof(Line) * cap);
 
-	if(g_editor.lines == NULL)
+	if(b->lines == NULL)
 	{
 		die("malloc");
 	}
 
-	g_editor.line_cap = cap;
-	undo_copy_lines(g_editor.lines, state->lines, state->num_lines);
-	g_editor.num_lines = state->num_lines;
-	g_editor.cx = state->cx;
-	g_editor.cy = state->cy;
-	g_editor.want_cx = state->want_cx;
-	g_editor.sel_active = state->sel_active;
-	g_editor.sel_ax = state->sel_ax;
-	g_editor.sel_ay = state->sel_ay;
-	g_editor.dirty = state->dirty;
-	editor_clamp_cursor();
-	highlight_mark_dirty();
+	b->line_cap = cap;
+	undo_copy_lines(b->lines, state->lines, state->num_lines);
+	b->num_lines = state->num_lines;
+	v->cx = state->cx;
+	v->cy = state->cy;
+	v->want_cx = state->want_cx;
+	v->sel_active = state->sel_active;
+	v->sel_ax = state->sel_ax;
+	v->sel_ay = state->sel_ay;
+	b->dirty = state->dirty;
+	editor_clamp_cursor(b, v);
+	highlight_mark_dirty(b);
 }
 
-static void undo_stack_clear(UndoState *stack, size_t *count)
+static void undo_stack_clear(UndoSlot *stack, size_t *count)
 {
 	size_t i;
 
@@ -173,9 +152,9 @@ static void undo_stack_clear(UndoState *stack, size_t *count)
 	*count = 0;
 }
 
-static void undo_stack_push(UndoState *stack, size_t *count)
+static void undo_stack_push(Buffer *b, View *v, UndoSlot *stack, size_t *count)
 {
-	if(stack == NULL || count == NULL)
+	if(b == NULL || v == NULL || stack == NULL || count == NULL)
 	{
 		return;
 	}
@@ -183,76 +162,106 @@ static void undo_stack_push(UndoState *stack, size_t *count)
 	if(*count >= UNDO_LIMIT)
 	{
 		undo_state_free(&stack[0]);
-		memmove(&stack[0], &stack[1], sizeof(UndoState) * (UNDO_LIMIT - 1));
+		memmove(&stack[0], &stack[1], sizeof(UndoSlot) * (UNDO_LIMIT - 1));
 		(*count)--;
 		stack[*count].lines = NULL;
 		stack[*count].num_lines = 0;
 	}
 
-	undo_state_capture(&stack[*count]);
+	undo_state_capture(b, v, &stack[*count]);
 	(*count)++;
 }
 
-void undo_reset(void)
+void undo_reset(Buffer *b)
 {
-	undo_stack_clear(s_undo, &s_undo_count);
-	undo_stack_clear(s_redo, &s_redo_count);
-	s_kind = UNDO_OTHER;
-	s_cy = 0;
-	s_cx = 0;
-}
-
-void undo_free(void)
-{
-	undo_reset();
-}
-
-void undo_begin(int kind)
-{
-	if(kind != UNDO_OTHER && kind == s_kind && g_editor.cy == s_cy && g_editor.cx == s_cx)
+	if(b == NULL)
 	{
 		return;
 	}
 
-	undo_stack_push(s_undo, &s_undo_count);
-	undo_stack_clear(s_redo, &s_redo_count);
+	undo_stack_clear(b->undo.undo, &b->undo.undo_count);
+	undo_stack_clear(b->undo.redo, &b->undo.redo_count);
+	b->undo.kind = UNDO_OTHER;
+	b->undo.cy = 0;
+	b->undo.cx = 0;
 }
 
-void undo_end(int kind)
+void undo_free(Buffer *b)
 {
-	s_kind = kind;
-	s_cy = g_editor.cy;
-	s_cx = g_editor.cx;
+	if(b == NULL)
+	{
+		return;
+	}
+
+	undo_reset(b);
 }
 
-int undo_undo(void)
+void undo_begin(Buffer *b, View *v, int kind)
 {
-	if(s_undo_count == 0)
+	if(b == NULL || v == NULL)
+	{
+		return;
+	}
+
+	if(kind != UNDO_OTHER && kind == b->undo.kind && v->cy == b->undo.cy && v->cx == b->undo.cx)
+	{
+		return;
+	}
+
+	undo_stack_push(b, v, b->undo.undo, &b->undo.undo_count);
+	undo_stack_clear(b->undo.redo, &b->undo.redo_count);
+}
+
+void undo_end(Buffer *b, View *v, int kind)
+{
+	if(b == NULL || v == NULL)
+	{
+		return;
+	}
+
+	b->undo.kind = kind;
+	b->undo.cy = v->cy;
+	b->undo.cx = v->cx;
+}
+
+int undo_undo(Buffer *b, View *v)
+{
+	if(b == NULL || v == NULL)
+	{
+		return 0;
+	}
+
+	if(b->undo.undo_count == 0)
 	{
 		editor_set_status("Nothing to undo");
 		return 0;
 	}
 
-	undo_stack_push(s_redo, &s_redo_count);
-	s_undo_count--;
-	undo_state_restore(&s_undo[s_undo_count]);
-	s_kind = UNDO_OTHER;
+	undo_stack_push(b, v, b->undo.redo, &b->undo.redo_count);
+	b->undo.undo_count--;
+	undo_state_restore(b, v, &b->undo.undo[b->undo.undo_count]);
+	b->undo.kind = UNDO_OTHER;
 	editor_set_status("Undid change");
 	return 1;
 }
 
-int undo_redo(void)
+int undo_redo(Buffer *b, View *v)
 {
-	if(s_redo_count == 0)
+	if(b == NULL || v == NULL)
+	{
+		return 0;
+	}
+
+	if(b->undo.redo_count == 0)
 	{
 		editor_set_status("Nothing to redo");
 		return 0;
 	}
 
-	undo_stack_push(s_undo, &s_undo_count);
-	s_redo_count--;
-	undo_state_restore(&s_redo[s_redo_count]);
-	s_kind = UNDO_OTHER;
+	undo_stack_push(b, v, b->undo.undo, &b->undo.undo_count);
+	b->undo.redo_count--;
+	undo_state_restore(b, v, &b->undo.redo[b->undo.redo_count]);
+	b->undo.kind = UNDO_OTHER;
 	editor_set_status("Redid change");
 	return 1;
 }

@@ -5,6 +5,7 @@
 #include "editor.h"
 #include "mouse.h"
 #include "search.h"
+#include "tabs.h"
 #include "view.h"
 
 #define MOUSE_WHEEL_STEP 3
@@ -27,60 +28,66 @@ void mouse_init(void)
 	s_enabled = 1;
 }
 
-static void mouse_scroll(int direction)
+static void mouse_scroll(Buffer *b, View *v, int direction)
 {
 	size_t max_cy;
 
-	max_cy = editor_max_cy();
+	if(b == NULL || v == NULL)
+	{
+		return;
+	}
+
+	max_cy = editor_max_cy(b);
 
 	if(direction < 0)
 	{
-		if(g_editor.cy <= (size_t)MOUSE_WHEEL_STEP)
+		if(v->cy <= (size_t)MOUSE_WHEEL_STEP)
 		{
-			g_editor.cy = 0;
+			v->cy = 0;
 		}
 		else
 		{
-			g_editor.cy -= (size_t)MOUSE_WHEEL_STEP;
+			v->cy -= (size_t)MOUSE_WHEEL_STEP;
 		}
 	}
 	else
 	{
-		g_editor.cy += (size_t)MOUSE_WHEEL_STEP;
+		v->cy += (size_t)MOUSE_WHEEL_STEP;
 
-		if(g_editor.cy > max_cy)
+		if(v->cy > max_cy)
 		{
-			g_editor.cy = max_cy;
+			v->cy = max_cy;
 		}
 	}
 
-	if(g_editor.cy >= g_editor.num_lines)
+	if(v->cy >= b->num_lines)
 	{
-		g_editor.cx = 0;
+		v->cx = 0;
 	}
 	else
 	{
-		g_editor.cx = g_editor.want_cx;
+		v->cx = v->want_cx;
 	}
 
-	editor_select_clear();
-	editor_clamp_cursor();
-	editor_scroll();
+	editor_select_clear(v);
+	editor_clamp_cursor(b, v);
+	editor_scroll(b, v);
 
-	if(g_editor.cy < g_editor.num_lines)
+	if(v->cy < b->num_lines)
 	{
-		g_editor.want_cx = g_editor.cx;
+		v->want_cx = v->cx;
 	}
 }
 
-static int mouse_click(MEVENT *ev)
+static int mouse_click(Buffer *b, View *v, MEVENT *ev)
 {
 	Line *line;
 	int text_off;
 	int map_w;
+	int view_y;
 	size_t file_row;
 
-	if(ev == NULL)
+	if(b == NULL || v == NULL || ev == NULL)
 	{
 		return 0;
 	}
@@ -90,62 +97,78 @@ static int mouse_click(MEVENT *ev)
 		return 0;
 	}
 
-	if(g_editor.num_lines == 0)
+	if(ev->y == 0)
+	{
+		int tab;
+
+		tab = tabs_hit_tab(ev->x);
+
+		if(tab < 0)
+		{
+			return 0;
+		}
+
+		tabs_activate(tab);
+		return 1;
+	}
+
+	if(b->num_lines == 0)
 	{
 		return 0;
 	}
 
-	map_w = editor_map_width();
+	view_y = ev->y - VIEW_TOP;
+	map_w = editor_map_width(b);
 
 	if(map_w > 0 && ev->x >= COLS - map_w)
 	{
 		size_t target;
 
-		target = editor_map_bucket_start(ev->y);
+		target = editor_map_bucket_start(b, view_y);
 
-		if(target >= g_editor.num_lines)
+		if(target >= b->num_lines)
 		{
 			return 0;
 		}
 
-		g_editor.cy = target;
-		editor_select_clear();
-		complete_reset();
+		v->cy = target;
+		editor_select_clear(v);
+		complete_reset(b);
 		search_deactivate();
-		editor_clamp_cursor();
-		g_editor.want_cx = g_editor.cx;
+		editor_clamp_cursor(b, v);
+		v->want_cx = v->cx;
 		return 1;
 	}
 
-	file_row = g_editor.row_off + (size_t)ev->y;
+	file_row = v->row_off + (size_t)view_y;
 
-	if(file_row >= g_editor.num_lines)
+	if(file_row >= b->num_lines)
 	{
 		return 0;
 	}
 
-	text_off = editor_text_offset();
-	g_editor.cy = file_row;
-	line = &g_editor.lines[file_row];
+	text_off = editor_text_offset(b);
+	v->cy = file_row;
+	line = &b->lines[file_row];
 
 	if(ev->x <= text_off)
 	{
-		g_editor.cx = 0;
+		v->cx = 0;
 	}
 	else
 	{
-		g_editor.cx = line_byte_at_cell(line, g_editor.col_off, ev->x - text_off);
+		v->cx = line_byte_at_cell(line, v->col_off, ev->x - text_off);
 	}
 
-	editor_clamp_cursor();
-	g_editor.want_cx = g_editor.cx;
-	editor_select_clear();
-	complete_reset();
+	editor_clamp_cursor(b, v);
+	v->want_cx = v->cx;
+	editor_select_clear(v);
+	complete_reset(b);
 	search_deactivate();
 	return 1;
 }
 
-int mouse_handle(void)
+int mouse_handle(Buffer *b, View *v)
 {
 	MEVENT ev;
 
@@ -161,29 +184,29 @@ int mouse_handle(void)
 
 	if((ev.bstate & BUTTON4_PRESSED) != 0)
 	{
-		mouse_scroll(-1);
+		mouse_scroll(b, v, -1);
 		return 1;
 	}
 
 	if((ev.bstate & BUTTON5_PRESSED) != 0)
 	{
-		mouse_scroll(1);
+		mouse_scroll(b, v, 1);
 		return 1;
 	}
 
 	if((ev.bstate & BUTTON1_PRESSED) != 0)
 	{
-		return mouse_click(&ev);
+		return mouse_click(b, v, &ev);
 	}
 
 	if((ev.bstate & BUTTON1_CLICKED) != 0)
 	{
-		return mouse_click(&ev);
+		return mouse_click(b, v, &ev);
 	}
 
 	if((ev.bstate & BUTTON1_DOUBLE_CLICKED) != 0)
 	{
-		return mouse_click(&ev);
+		return mouse_click(b, v, &ev);
 	}
 
 	return 0;

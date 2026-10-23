@@ -12,55 +12,7 @@
 #include "util.h"
 #include "view.h"
 
-Editor g_editor;
-
-void editor_init(void)
-{
-	memset(&g_editor, 0, sizeof(g_editor));
-	g_editor.line_cap = INITIAL_LINE_CAP;
-	g_editor.lines = malloc(sizeof(Line) * g_editor.line_cap);
-
-	if(g_editor.lines == NULL)
-	{
-		die("malloc");
-	}
-
-	g_editor.num_lines = 0;
-	g_editor.cx = 0;
-	g_editor.cy = 0;
-	g_editor.want_cx = 0;
-	g_editor.row_off = 0;
-	g_editor.col_off = 0;
-	g_editor.sel_active = 0;
-	g_editor.sel_ax = 0;
-	g_editor.sel_ay = 0;
-	g_editor.filename[0] = '\0';
-	g_editor.dirty = 0;
-	g_editor.status[0] = '\0';
-	g_editor.eol = EOL_LF;
-	g_editor.trailing_nl = 0;
-	g_editor.filetype = HL_PLAIN;
-	clipboard_reset();
-	search_reset();
-	undo_reset();
-}
-
-void editor_free(void)
-{
-	size_t i;
-
-	for(i = 0; i < g_editor.num_lines; i++)
-	{
-		line_free(&g_editor.lines[i]);
-	}
-
-	free(g_editor.lines);
-	g_editor.lines = NULL;
-	g_editor.num_lines = 0;
-	g_editor.line_cap = 0;
-	highlight_free();
-	undo_free();
-}
+static char s_status[STATUS_LIMIT];
 
 void editor_set_status(const char *msg)
 {
@@ -69,94 +21,164 @@ void editor_set_status(const char *msg)
 		return;
 	}
 
-	snprintf(g_editor.status, sizeof(g_editor.status), "%s", msg);
+	snprintf(s_status, sizeof(s_status), "%s", msg);
 }
 
-Line *editor_current_line(void)
+const char *editor_status(void)
 {
-	if(g_editor.cy >= g_editor.num_lines)
+	return s_status;
+}
+
+void buffer_init(Buffer *b)
+{
+	if(b == NULL)
+	{
+		return;
+	}
+
+	memset(b, 0, sizeof(*b));
+	b->line_cap = INITIAL_LINE_CAP;
+	b->lines = malloc(sizeof(Line) * b->line_cap);
+
+	if(b->lines == NULL)
+	{
+		die("malloc");
+	}
+
+	b->num_lines = 0;
+	b->eol = EOL_LF;
+	b->filetype = HL_PLAIN;
+	b->used = 1;
+}
+
+void buffer_free(Buffer *b)
+{
+	size_t i;
+
+	if(b == NULL)
+	{
+		return;
+	}
+
+	for(i = 0; i < b->num_lines; i++)
+	{
+		line_free(&b->lines[i]);
+	}
+
+	free(b->lines);
+	b->lines = NULL;
+	b->num_lines = 0;
+	b->line_cap = 0;
+	highlight_free(b);
+	undo_free(b);
+	memset(b, 0, sizeof(*b));
+}
+
+Line *editor_current_line(Buffer *b, View *v)
+{
+	if(b == NULL || v == NULL)
 	{
 		return NULL;
 	}
 
-	return &g_editor.lines[g_editor.cy];
+	if(v->cy >= b->num_lines)
+	{
+		return NULL;
+	}
+
+	return &b->lines[v->cy];
 }
 
-void editor_clamp_cursor(void)
+void editor_clamp_cursor(Buffer *b, View *v)
 {
 	Line *line;
 	size_t max_cy;
 
-	max_cy = editor_max_cy();
-
-	if(g_editor.cy > max_cy)
+	if(b == NULL || v == NULL)
 	{
-		g_editor.cy = max_cy;
+		return;
 	}
 
-	line = editor_current_line();
+	max_cy = editor_max_cy(b);
+
+	if(v->cy > max_cy)
+	{
+		v->cy = max_cy;
+	}
+
+	line = editor_current_line(b, v);
 
 	if(line == NULL)
 	{
 		return;
 	}
 
-	if(g_editor.cx > line->len)
+	if(v->cx > line->len)
 	{
-		g_editor.cx = line->len;
+		v->cx = line->len;
 	}
 
-	g_editor.cx = line_char_start(line, g_editor.cx);
+	v->cx = line_char_start(line, v->cx);
 
-	if(g_editor.sel_active != 0)
+	if(v->sel_active != 0)
 	{
-		if(g_editor.sel_ay > max_cy)
+		if(v->sel_ay > max_cy)
 		{
-			g_editor.sel_ay = max_cy;
+			v->sel_ay = max_cy;
 		}
 
-		if(g_editor.sel_ay < g_editor.num_lines && g_editor.sel_ax > g_editor.lines[g_editor.sel_ay].len)
+		if(v->sel_ay < b->num_lines && v->sel_ax > b->lines[v->sel_ay].len)
 		{
-			g_editor.sel_ax = g_editor.lines[g_editor.sel_ay].len;
+			v->sel_ax = b->lines[v->sel_ay].len;
 		}
 
-		if(g_editor.sel_ay < g_editor.num_lines)
+		if(v->sel_ay < b->num_lines)
 		{
-			g_editor.sel_ax = line_char_start(&g_editor.lines[g_editor.sel_ay], g_editor.sel_ax);
+			v->sel_ax = line_char_start(&b->lines[v->sel_ay], v->sel_ax);
 		}
 	}
 }
 
-void editor_select_clear(void)
+void editor_select_clear(View *v)
 {
-	g_editor.sel_active = 0;
-}
-
-void editor_select_mark(void)
-{
-	if(g_editor.sel_active != 0)
+	if(v == NULL)
 	{
 		return;
 	}
 
-	g_editor.sel_ax = g_editor.cx;
-	g_editor.sel_ay = g_editor.cy;
-	g_editor.sel_active = 1;
+	v->sel_active = 0;
 }
 
-void editor_selection_range(size_t *sy, size_t *sx, size_t *ey, size_t *ex)
+void editor_select_mark(View *v)
+{
+	if(v == NULL)
+	{
+		return;
+	}
+
+	if(v->sel_active != 0)
+	{
+		return;
+	}
+
+	v->sel_ax = v->cx;
+	v->sel_ay = v->cy;
+	v->sel_active = 1;
+}
+
+void editor_selection_range(View *v, size_t *sy, size_t *sx, size_t *ey, size_t *ex)
 {
 	size_t t;
 
-	if(sy == NULL || sx == NULL || ey == NULL || ex == NULL)
+	if(v == NULL || sy == NULL || sx == NULL || ey == NULL || ex == NULL)
 	{
 		return;
 	}
 
-	*sy = g_editor.sel_ay;
-	*sx = g_editor.sel_ax;
-	*ey = g_editor.cy;
-	*ex = g_editor.cx;
+	*sy = v->sel_ay;
+	*sx = v->sel_ax;
+	*ey = v->cy;
+	*ex = v->cx;
 
 	if(*ey < *sy || (*ey == *sy && *ex < *sx))
 	{

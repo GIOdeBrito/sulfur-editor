@@ -9,28 +9,14 @@
 #include "search.h"
 
 #define SEARCH_MAX_QUERY 128
-#define SEARCH_MAX_MATCHES 512
-
-typedef struct
-{
-	size_t row;
-	size_t col;
-} SearchMatch;
 
 static char s_query[SEARCH_MAX_QUERY];
-static SearchMatch s_matches[SEARCH_MAX_MATCHES];
-static size_t s_count;
-static size_t s_current;
 static int s_active;
-static int s_truncated;
 
 void search_reset(void)
 {
 	s_query[0] = '\0';
-	s_count = 0;
-	s_current = 0;
 	s_active = 0;
-	s_truncated = 0;
 }
 
 void search_deactivate(void)
@@ -43,51 +29,61 @@ int search_is_active(void)
 	return s_active;
 }
 
-static void search_count_text(char *buf, size_t cap)
+static void search_count_text(Buffer *b, char *buf, size_t cap)
 {
-	if(buf == NULL)
+	if(b == NULL || buf == NULL)
 	{
 		return;
 	}
 
-	if(s_truncated != 0)
+	if(b->search.truncated != 0)
 	{
-		snprintf(buf, cap, "%zu/%zu+ (first %d)", s_current + 1, s_count, SEARCH_MAX_MATCHES);
+		snprintf(buf, cap, "%zu/%zu+ (first %d)", b->search.current + 1, b->search.count, SEARCH_MAX_MATCHES);
 		return;
 	}
 
-	snprintf(buf, cap, "%zu/%zu", s_current + 1, s_count);
+	snprintf(buf, cap, "%zu/%zu", b->search.current + 1, b->search.count);
 }
 
-static void search_goto_current(void)
+static void search_goto_current(Buffer *b, View *v)
 {
 	char count[64];
 	char msg[STATUS_LIMIT];
 
-	if(s_count == 0 || s_current >= s_count)
+	if(b == NULL || v == NULL)
 	{
 		return;
 	}
 
-	g_editor.cy = s_matches[s_current].row;
-	g_editor.cx = s_matches[s_current].col;
-	g_editor.want_cx = g_editor.cx;
-	editor_select_clear();
-	complete_reset();
-	editor_clamp_cursor();
-	search_count_text(count, sizeof(count));
+	if(b->search.count == 0 || b->search.current >= b->search.count)
+	{
+		return;
+	}
+
+	v->cy = b->search.matches[b->search.current].row;
+	v->cx = b->search.matches[b->search.current].col;
+	v->want_cx = v->cx;
+	editor_select_clear(v);
+	complete_reset(b);
+	editor_clamp_cursor(b, v);
+	search_count_text(b, count, sizeof(count));
 	snprintf(msg, sizeof(msg), "Match %s: %s", count, s_query);
 	editor_set_status(msg);
 }
 
-static void search_rescan(void)
+static void search_rescan(Buffer *b)
 {
 	size_t qlen;
 	size_t row;
 
-	s_count = 0;
-	s_current = 0;
-	s_truncated = 0;
+	if(b == NULL)
+	{
+		return;
+	}
+
+	b->search.count = 0;
+	b->search.current = 0;
+	b->search.truncated = 0;
 	qlen = strlen(s_query);
 
 	if(qlen == 0)
@@ -95,12 +91,12 @@ static void search_rescan(void)
 		return;
 	}
 
-	for(row = 0; row < g_editor.num_lines; row++)
+	for(row = 0; row < b->num_lines; row++)
 	{
 		Line *line;
 		const char *p;
 
-		line = &g_editor.lines[row];
+		line = &b->lines[row];
 
 		if(line->data == NULL || line->len < qlen)
 		{
@@ -111,54 +107,64 @@ static void search_rescan(void)
 
 		while((p = strstr(p, s_query)) != NULL)
 		{
-			if(s_count >= SEARCH_MAX_MATCHES)
+			if(b->search.count >= SEARCH_MAX_MATCHES)
 			{
-				s_truncated = 1;
+				b->search.truncated = 1;
 				return;
 			}
 
-			s_matches[s_count].row = row;
-			s_matches[s_count].col = (size_t)(p - line->data);
-			s_count++;
+			b->search.matches[b->search.count].row = row;
+			b->search.matches[b->search.count].col = (size_t)(p - line->data);
+			b->search.count++;
 			p += qlen;
 		}
 	}
 }
 
-static void search_jump_from_cursor(void)
+static void search_jump_from_cursor(Buffer *b, View *v)
 {
 	size_t i;
 
-	for(i = 0; i < s_count; i++)
+	if(b == NULL || v == NULL)
 	{
-		if(s_matches[i].row > g_editor.cy)
+		return;
+	}
+
+	for(i = 0; i < b->search.count; i++)
+	{
+		if(b->search.matches[i].row > v->cy)
 		{
 			break;
 		}
 
-		if(s_matches[i].row == g_editor.cy && s_matches[i].col >= g_editor.cx)
+		if(b->search.matches[i].row == v->cy && b->search.matches[i].col >= v->cx)
 		{
 			break;
 		}
 	}
 
-	if(i >= s_count)
+	if(i >= b->search.count)
 	{
 		i = 0;
 	}
 
-	s_current = i;
+	b->search.current = i;
 	s_active = 1;
-	search_goto_current();
+	search_goto_current(b, v);
 }
 
-void search_prompt_and_find(void)
+void search_prompt_and_find(Buffer *b, View *v)
 {
 	char query[SEARCH_MAX_QUERY];
 	char msg[STATUS_LIMIT];
 	int rows;
 
-	complete_reset();
+	if(b == NULL || v == NULL)
+	{
+		return;
+	}
+
+	complete_reset(b);
 	rows = LINES - 1;
 	echo();
 	curs_set(1);
@@ -185,9 +191,9 @@ void search_prompt_and_find(void)
 			return;
 		}
 
-		search_rescan();
+		search_rescan(b);
 
-		if(s_count == 0)
+		if(b->search.count == 0)
 		{
 			s_active = 0;
 			snprintf(msg, sizeof(msg), "Not found: %s", s_query);
@@ -195,14 +201,14 @@ void search_prompt_and_find(void)
 			return;
 		}
 
-		search_jump_from_cursor();
+		search_jump_from_cursor(b, v);
 		return;
 	}
 
 	snprintf(s_query, sizeof(s_query), "%s", query);
-	search_rescan();
+	search_rescan(b);
 
-	if(s_count == 0)
+	if(b->search.count == 0)
 	{
 		s_active = 0;
 		snprintf(msg, sizeof(msg), "Not found: %s", s_query);
@@ -210,26 +216,31 @@ void search_prompt_and_find(void)
 		return;
 	}
 
-	search_jump_from_cursor();
+	search_jump_from_cursor(b, v);
 }
 
-void search_next(int direction)
+void search_next(Buffer *b, View *v, int direction)
 {
-	if(s_active == 0 || s_count == 0)
+	if(b == NULL || v == NULL)
+	{
+		return;
+	}
+
+	if(s_active == 0 || b->search.count == 0)
 	{
 		return;
 	}
 
 	if(direction < 0)
 	{
-		s_current = (s_current + s_count - 1) % s_count;
+		b->search.current = (b->search.current + b->search.count - 1) % b->search.count;
 	}
 	else
 	{
-		s_current = (s_current + 1) % s_count;
+		b->search.current = (b->search.current + 1) % b->search.count;
 	}
 
-	search_goto_current();
+	search_goto_current(b, v);
 }
 
 static int search_is_nav_key(int key)
@@ -262,22 +273,27 @@ static int search_is_nav_key(int key)
 	return 0;
 }
 
-int search_handle_key(int key)
+int search_handle_key(Buffer *b, View *v, int key)
 {
 	if(s_active == 0)
 	{
 		return 0;
 	}
 
+	if(b == NULL || v == NULL)
+	{
+		return 0;
+	}
+
 	if(key == 'n' || key == KEY_ENTER || key == '\n' || key == '\r')
 	{
-		search_next(1);
+		search_next(b, v, 1);
 		return 1;
 	}
 
 	if(key == 'N')
 	{
-		search_next(-1);
+		search_next(b, v, -1);
 		return 1;
 	}
 
@@ -290,7 +306,7 @@ int search_handle_key(int key)
 
 	if(key == CTRL_KEY('f'))
 	{
-		search_prompt_and_find();
+		search_prompt_and_find(b, v);
 		return 1;
 	}
 
@@ -303,7 +319,7 @@ int search_handle_key(int key)
 	return 0;
 }
 
-int search_cover(size_t row, size_t col, int *is_current)
+int search_cover(Buffer *b, size_t row, size_t col, int *is_current)
 {
 	size_t qlen;
 	size_t lo;
@@ -314,7 +330,12 @@ int search_cover(size_t row, size_t col, int *is_current)
 		*is_current = 0;
 	}
 
-	if(s_active == 0 || s_count == 0)
+	if(b == NULL)
+	{
+		return 0;
+	}
+
+	if(s_active == 0 || b->search.count == 0)
 	{
 		return 0;
 	}
@@ -327,7 +348,7 @@ int search_cover(size_t row, size_t col, int *is_current)
 	}
 
 	lo = 0;
-	hi = s_count;
+	hi = b->search.count;
 
 	while(lo < hi)
 	{
@@ -335,7 +356,7 @@ int search_cover(size_t row, size_t col, int *is_current)
 
 		mid = lo + (hi - lo) / 2;
 
-		if(s_matches[mid].row < row || (s_matches[mid].row == row && s_matches[mid].col <= col))
+		if(b->search.matches[mid].row < row || (b->search.matches[mid].row == row && b->search.matches[mid].col <= col))
 		{
 			lo = mid + 1;
 		}
@@ -352,17 +373,17 @@ int search_cover(size_t row, size_t col, int *is_current)
 
 	lo--;
 
-	if(s_matches[lo].row != row)
+	if(b->search.matches[lo].row != row)
 	{
 		return 0;
 	}
 
-	if(col - s_matches[lo].col >= qlen)
+	if(col - b->search.matches[lo].col >= qlen)
 	{
 		return 0;
 	}
 
-	if(is_current != NULL && lo == s_current)
+	if(is_current != NULL && lo == b->search.current)
 	{
 		*is_current = 1;
 	}

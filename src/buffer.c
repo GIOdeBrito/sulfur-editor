@@ -14,37 +14,47 @@
 #include "undo.h"
 #include "util.h"
 
-void editor_ensure_line_cap(size_t needed)
+void editor_ensure_line_cap(Buffer *b, size_t needed)
 {
 	Line *grown;
 
-	if(needed <= g_editor.line_cap)
+	if(b == NULL)
 	{
 		return;
 	}
 
-	while(g_editor.line_cap < needed)
+	if(needed <= b->line_cap)
 	{
-		g_editor.line_cap *= 2;
+		return;
 	}
 
-	grown = realloc(g_editor.lines, sizeof(Line) * g_editor.line_cap);
+	while(b->line_cap < needed)
+	{
+		b->line_cap *= 2;
+	}
+
+	grown = realloc(b->lines, sizeof(Line) * b->line_cap);
 
 	if(grown == NULL)
 	{
 		die("realloc");
 	}
 
-	g_editor.lines = grown;
+	b->lines = grown;
 }
 
-void editor_append_line(const char *text, size_t len)
+void editor_append_line(Buffer *b, const char *text, size_t len)
 {
 	Line *line;
 	size_t i;
 
-	editor_ensure_line_cap(g_editor.num_lines + 1);
-	line = &g_editor.lines[g_editor.num_lines];
+	if(b == NULL)
+	{
+		return;
+	}
+
+	editor_ensure_line_cap(b, b->num_lines + 1);
+	line = &b->lines[b->num_lines];
 	line_init(line);
 	line_ensure_cap(line, len + 1);
 
@@ -58,21 +68,26 @@ void editor_append_line(const char *text, size_t len)
 
 	line->len = len;
 	line->data[len] = '\0';
-	g_editor.num_lines++;
+	b->num_lines++;
 }
 
-void editor_insert_line_at(size_t at, const char *text, size_t len)
+void editor_insert_line_at(Buffer *b, size_t at, const char *text, size_t len)
 {
 	Line *line;
 
-	if(at > g_editor.num_lines)
+	if(b == NULL)
 	{
 		return;
 	}
 
-	editor_ensure_line_cap(g_editor.num_lines + 1);
-	memmove(&g_editor.lines[at + 1], &g_editor.lines[at], sizeof(Line) * (g_editor.num_lines - at));
-	line = &g_editor.lines[at];
+	if(at > b->num_lines)
+	{
+		return;
+	}
+
+	editor_ensure_line_cap(b, b->num_lines + 1);
+	memmove(&b->lines[at + 1], &b->lines[at], sizeof(Line) * (b->num_lines - at));
+	line = &b->lines[at];
 	line_init(line);
 	line_ensure_cap(line, len + 1);
 
@@ -83,17 +98,22 @@ void editor_insert_line_at(size_t at, const char *text, size_t len)
 
 	line->len = len;
 	line->data[len] = '\0';
-	g_editor.num_lines++;
+	b->num_lines++;
 }
 
-const char *editor_eol_name(void)
+const char *editor_eol_name(const Buffer *b)
 {
-	if(g_editor.eol == EOL_CRLF)
+	if(b == NULL)
+	{
+		return "LF";
+	}
+
+	if(b->eol == EOL_CRLF)
 	{
 		return "CRLF";
 	}
 
-	if(g_editor.eol == EOL_MIXED)
+	if(b->eol == EOL_MIXED)
 	{
 		return "MIXED";
 	}
@@ -101,7 +121,24 @@ const char *editor_eol_name(void)
 	return "LF";
 }
 
-void editor_open(const char *filename)
+static void editor_clear_lines(Buffer *b)
+{
+	size_t i;
+
+	if(b == NULL)
+	{
+		return;
+	}
+
+	for(i = 0; i < b->num_lines; i++)
+	{
+		line_free(&b->lines[i]);
+	}
+
+	b->num_lines = 0;
+}
+
+void editor_open(Buffer *b, const char *filename)
 {
 	FILE *fp;
 	char *buf;
@@ -110,26 +147,33 @@ void editor_open(const char *filename)
 	size_t crlf_count;
 	size_t lf_count;
 
-	if(filename == NULL || filename[0] == '\0')
+	if(b == NULL)
 	{
-		g_editor.eol = EOL_LF;
-		g_editor.trailing_nl = 0;
-		editor_append_line("", 0);
-		highlight_set_filetype();
-		highlight_mark_dirty();
 		return;
 	}
 
-	snprintf(g_editor.filename, sizeof(g_editor.filename), "%s", filename);
-	highlight_set_filetype();
+	editor_clear_lines(b);
+	b->filename[0] = '\0';
+	b->eol = EOL_LF;
+	b->trailing_nl = 0;
+	b->dirty = 0;
+
+	if(filename == NULL || filename[0] == '\0')
+	{
+		editor_append_line(b, "", 0);
+		highlight_set_filetype(b);
+		highlight_mark_dirty(b);
+		return;
+	}
+
+	snprintf(b->filename, sizeof(b->filename), "%s", filename);
+	highlight_set_filetype(b);
 	fp = fopen(filename, "r");
 
 	if(fp == NULL)
 	{
-		g_editor.eol = EOL_LF;
-		g_editor.trailing_nl = 0;
-		editor_append_line("", 0);
-		highlight_mark_dirty();
+		editor_append_line(b, "", 0);
+		highlight_mark_dirty(b);
 		editor_set_status("New file");
 		return;
 	}
@@ -139,7 +183,6 @@ void editor_open(const char *filename)
 	read_len = 0;
 	crlf_count = 0;
 	lf_count = 0;
-	g_editor.trailing_nl = 0;
 
 	while((read_len = getline(&buf, &cap, fp)) != -1)
 	{
@@ -170,14 +213,14 @@ void editor_open(const char *filename)
 			lf_count++;
 		}
 
-		g_editor.trailing_nl = has_nl;
+		b->trailing_nl = has_nl;
 
 		while(len > 0 && (buf[len - 1] == '\n' || buf[len - 1] == '\r'))
 		{
 			len--;
 		}
 
-		editor_append_line(buf, len);
+		editor_append_line(b, buf, len);
 	}
 
 	free(buf);
@@ -185,50 +228,49 @@ void editor_open(const char *filename)
 
 	if(crlf_count > 0 && lf_count == 0)
 	{
-		g_editor.eol = EOL_CRLF;
+		b->eol = EOL_CRLF;
 	}
 	else if(crlf_count > 0 && lf_count > 0)
 	{
-		g_editor.eol = EOL_MIXED;
+		b->eol = EOL_MIXED;
 	}
 	else
 	{
-		g_editor.eol = EOL_LF;
+		b->eol = EOL_LF;
 	}
 
-	if(g_editor.num_lines == 0)
+	if(b->num_lines == 0)
 	{
-		editor_append_line("", 0);
+		editor_append_line(b, "", 0);
 	}
 
-	g_editor.dirty = 0;
-	highlight_mark_dirty();
+	highlight_mark_dirty(b);
 	editor_set_status("File loaded");
 }
 
-static int editor_write_all(FILE *fp)
+static int editor_write_all(Buffer *b, FILE *fp)
 {
 	size_t i;
 
-	if(fp == NULL)
+	if(b == NULL || fp == NULL)
 	{
 		return -1;
 	}
 
-	for(i = 0; i < g_editor.num_lines; i++)
+	for(i = 0; i < b->num_lines; i++)
 	{
 		Line *line;
 		const char *newline;
 		size_t newline_len;
 
-		line = &g_editor.lines[i];
+		line = &b->lines[i];
 
 		if(line->len > 0 && fwrite(line->data, 1, line->len, fp) != line->len)
 		{
 			return -1;
 		}
 
-		if(i + 1 >= g_editor.num_lines)
+		if(i + 1 >= b->num_lines)
 		{
 			continue;
 		}
@@ -236,7 +278,7 @@ static int editor_write_all(FILE *fp)
 		newline = "\n";
 		newline_len = 1;
 
-		if(g_editor.eol == EOL_CRLF)
+		if(b->eol == EOL_CRLF)
 		{
 			newline = "\r\n";
 			newline_len = 2;
@@ -248,7 +290,7 @@ static int editor_write_all(FILE *fp)
 		}
 	}
 
-	if(g_editor.trailing_nl && g_editor.num_lines > 0)
+	if(b->trailing_nl && b->num_lines > 0)
 	{
 		const char *final_nl;
 		size_t final_len;
@@ -256,7 +298,7 @@ static int editor_write_all(FILE *fp)
 		final_nl = "\n";
 		final_len = 1;
 
-		if(g_editor.eol == EOL_CRLF)
+		if(b->eol == EOL_CRLF)
 		{
 			final_nl = "\r\n";
 			final_len = 2;
@@ -271,7 +313,7 @@ static int editor_write_all(FILE *fp)
 	return 0;
 }
 
-int editor_save(void)
+int editor_save(Buffer *b)
 {
 	FILE *fp;
 	char tmp[FILENAME_LIMIT + 16];
@@ -279,12 +321,17 @@ int editor_save(void)
 	int have_mode;
 	int fd;
 
-	if(g_editor.filename[0] == '\0')
+	if(b == NULL)
 	{
 		return -1;
 	}
 
-	if(snprintf(tmp, sizeof(tmp), "%s.sulf.tmp", g_editor.filename) >= (int)sizeof(tmp))
+	if(b->filename[0] == '\0')
+	{
+		return -1;
+	}
+
+	if(snprintf(tmp, sizeof(tmp), "%s.sulf.tmp", b->filename) >= (int)sizeof(tmp))
 	{
 		editor_set_status("Cannot save: filename too long");
 		return -1;
@@ -292,7 +339,7 @@ int editor_save(void)
 
 	have_mode = 0;
 
-	if(stat(g_editor.filename, &st) == 0)
+	if(stat(b->filename, &st) == 0)
 	{
 		have_mode = 1;
 	}
@@ -315,7 +362,7 @@ int editor_save(void)
 		}
 	}
 
-	if(editor_write_all(fp) != 0)
+	if(editor_write_all(b, fp) != 0)
 	{
 		fclose(fp);
 		remove(tmp);
@@ -336,67 +383,45 @@ int editor_save(void)
 	if(fclose(fp) != 0)
 	{
 		remove(tmp);
-		editor_set_status("Cannot save: write failed");
+		editor_set_status("Cannot save: rename failed");
 		return -1;
 	}
 
-	if(rename(tmp, g_editor.filename) != 0)
+	if(rename(tmp, b->filename) != 0)
 	{
 		remove(tmp);
 		editor_set_status("Cannot save: rename failed");
 		return -1;
 	}
 
-	g_editor.dirty = 0;
+	b->dirty = 0;
 
-	if(g_editor.eol == EOL_MIXED)
+	if(b->eol == EOL_MIXED)
 	{
-		g_editor.eol = EOL_LF;
+		b->eol = EOL_LF;
 	}
 
 	editor_set_status("File saved");
 	return 0;
 }
 
-void editor_close_buffer(void)
+void editor_close_buffer(Buffer *b)
 {
-	size_t i;
-
-	for(i = 0; i < g_editor.num_lines; i++)
+	if(b == NULL)
 	{
-		line_free(&g_editor.lines[i]);
+		return;
 	}
 
-	g_editor.num_lines = 0;
-	g_editor.cx = 0;
-	g_editor.cy = 0;
-	g_editor.want_cx = 0;
-	g_editor.row_off = 0;
-	g_editor.col_off = 0;
-	g_editor.sel_active = 0;
-	g_editor.sel_ax = 0;
-	g_editor.sel_ay = 0;
-	g_editor.filename[0] = '\0';
-	g_editor.dirty = 0;
-	g_editor.status[0] = '\0';
-	g_editor.eol = EOL_LF;
-	g_editor.trailing_nl = 0;
-	g_editor.filetype = HL_PLAIN;
-	highlight_free();
-	highlight_mark_dirty();
-	undo_reset();
+	editor_clear_lines(b);
+	editor_append_line(b, "", 0);
+	b->filename[0] = '\0';
+	b->dirty = 0;
+	b->eol = EOL_LF;
+	b->trailing_nl = 0;
+	b->filetype = HL_PLAIN;
+	highlight_free(b);
+	highlight_mark_dirty(b);
+	undo_reset(b);
 	search_deactivate();
-	complete_reset();
-}
-
-int editor_switch_file(const char *path)
-{
-	if(path == NULL || path[0] == '\0')
-	{
-		return -1;
-	}
-
-	editor_close_buffer();
-	editor_open(path);
-	return 0;
+	complete_reset(b);
 }

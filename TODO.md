@@ -25,8 +25,7 @@ Ideas only — never implement unasked.
 ## Quality of life
 - Word wrap toggle (soft wrap, no buffer change)
 - Periodic backup file (`.#name` + restore prompt)
-- Multi-buffer/tabs + split view (breaks single `g_editor`)
-- File explorer / fuzzy open
+- Split view: multiple panes per tab, one buffer per pane (tabs done)
 - Config file (`~/.config/sulf`: keys, theme, `TAB_WIDTH`)
 
 ## Platform / IDE growth

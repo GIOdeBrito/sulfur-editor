@@ -7,6 +7,7 @@
 #include "editor.h"
 #include "highlight.h"
 #include "search.h"
+#include "tabs.h"
 #include "view.h"
 
 #define MAP_CONTENT_WIDTH 3
@@ -47,12 +48,26 @@ static void editor_draw_tab(int y, int col, int w)
 	mvaddnstr(y, col, spaces, w);
 }
 
-int editor_gutter_width(void)
+int editor_view_rows(void)
+{
+	int view_rows;
+
+	view_rows = LINES - 3;
+
+	if(view_rows < 1)
+	{
+		view_rows = 1;
+	}
+
+	return view_rows;
+}
+
+int editor_gutter_width(Buffer *b)
 {
 	size_t n;
 	int digits;
 
-	n = g_editor.num_lines;
+	n = b->num_lines;
 	digits = 0;
 
 	do
@@ -69,16 +84,16 @@ int editor_gutter_width(void)
 	return digits;
 }
 
-int editor_text_offset(void)
+int editor_text_offset(Buffer *b)
 {
-	return editor_gutter_width() + 1;
+	return editor_gutter_width(b) + 1;
 }
 
-int editor_view_cols(void)
+int editor_view_cols(Buffer *b)
 {
 	int cols;
 
-	cols = COLS - editor_text_offset() - editor_map_width();
+	cols = COLS - editor_text_offset(b) - editor_map_width(b);
 
 	if(cols < 1)
 	{
@@ -88,9 +103,9 @@ int editor_view_cols(void)
 	return cols;
 }
 
-int editor_map_width(void)
+int editor_map_width(Buffer *b)
 {
-	if(COLS < editor_text_offset() + 1 + MAP_WIDTH)
+	if(b == NULL || COLS < editor_text_offset(b) + 1 + MAP_WIDTH)
 	{
 		return 0;
 	}
@@ -98,12 +113,12 @@ int editor_map_width(void)
 	return MAP_WIDTH;
 }
 
-size_t editor_map_bucket_start(int y)
+size_t editor_map_bucket_start(Buffer *b, int y)
 {
 	int view_rows;
 	size_t num;
 
-	view_rows = LINES - 2;
+	view_rows = editor_view_rows();
 
 	if(view_rows < 1)
 	{
@@ -115,7 +130,7 @@ size_t editor_map_bucket_start(int y)
 		return 0;
 	}
 
-	num = g_editor.num_lines;
+	num = b->num_lines;
 
 	if(num <= (size_t)view_rows)
 	{
@@ -125,19 +140,24 @@ size_t editor_map_bucket_start(int y)
 	return (size_t)y * num / (size_t)view_rows;
 }
 
-static int editor_is_selected(size_t file_row, size_t col)
+static int editor_is_selected(View *v, size_t file_row, size_t col)
 {
 	size_t sy;
 	size_t sx;
 	size_t ey;
 	size_t ex;
 
-	if(g_editor.sel_active == 0)
+	if(v == NULL)
 	{
 		return 0;
 	}
 
-	editor_selection_range(&sy, &sx, &ey, &ex);
+	if(v->sel_active == 0)
+	{
+		return 0;
+	}
+
+	editor_selection_range(v, &sy, &sx, &ey, &ex);
 
 	if(file_row < sy || file_row > ey)
 	{
@@ -162,16 +182,16 @@ static int editor_is_selected(size_t file_row, size_t col)
 	return 1;
 }
 
-static int editor_cell_kind(size_t file_row, size_t col)
+static int editor_cell_kind(Buffer *b, View *v, size_t file_row, size_t col)
 {
 	int current;
 
-	if(editor_is_selected(file_row, col) != 0)
+	if(editor_is_selected(v, file_row, col) != 0)
 	{
 		return 0;
 	}
 
-	if(search_cover(file_row, col, &current) != 0)
+	if(search_cover(b, file_row, col, &current) != 0)
 	{
 		return (current != 0) ? 3 : 2;
 	}
@@ -179,7 +199,7 @@ static int editor_cell_kind(size_t file_row, size_t col)
 	return 1;
 }
 
-static void editor_draw_colored_line(int y, int text_x, Line *line, size_t file_row, int view_cols)
+static void editor_draw_colored_line(Buffer *b, View *v, int y, int text_x, Line *line, size_t file_row, int view_cols)
 {
 	const unsigned char *cls;
 	size_t start;
@@ -194,14 +214,14 @@ static void editor_draw_colored_line(int y, int text_x, Line *line, size_t file_
 		return;
 	}
 
-	cls = highlight_classes(file_row);
+	cls = highlight_classes(b, file_row);
 
 	if(cls == NULL)
 	{
 		return;
 	}
 
-	start = g_editor.col_off;
+	start = v->col_off;
 	end = start + (size_t)view_cols;
 
 	if(end > line->len)
@@ -259,10 +279,10 @@ static void editor_draw_colored_line(int y, int text_x, Line *line, size_t file_
 			int kind;
 			int cell_attr;
 
-			kind = editor_cell_kind(file_row, k);
+			kind = editor_cell_kind(b, v, file_row, k);
 			m = k;
 
-			while(m < j && editor_cell_kind(file_row, m) == kind)
+			while(m < j && editor_cell_kind(b, v, file_row, m) == kind)
 			{
 				m = line_char_next(line, m);
 			}
@@ -313,76 +333,76 @@ static void editor_draw_colored_line(int y, int text_x, Line *line, size_t file_
 	}
 }
 
-size_t editor_max_cy(void)
+size_t editor_max_cy(Buffer *b)
 {
 	int view_rows;
 
-	view_rows = LINES - 2;
+	view_rows = editor_view_rows();
 
 	if(view_rows < 1)
 	{
 		view_rows = 1;
 	}
 
-	if(g_editor.num_lines == 0)
+	if(b->num_lines == 0)
 	{
 		return 0;
 	}
 
-	return g_editor.num_lines + (size_t)view_rows - 2;
+	return b->num_lines + (size_t)view_rows - 2;
 }
 
-void editor_scroll(void)
+void editor_scroll(Buffer *b, View *v)
 {
 	Line *line;
 	int view_rows;
 	int view_cols;
 
-	view_rows = LINES - 2;
-	view_cols = editor_view_cols();
+	view_rows = editor_view_rows();
+	view_cols = editor_view_cols(b);
 
 	if(view_rows < 1)
 	{
 		view_rows = 1;
 	}
 
-	if(g_editor.cy < g_editor.row_off)
+	if(v->cy < v->row_off)
 	{
-		g_editor.row_off = g_editor.cy;
+		v->row_off = v->cy;
 	}
 
-	if(g_editor.cy >= g_editor.row_off + (size_t)view_rows)
+	if(v->cy >= v->row_off + (size_t)view_rows)
 	{
-		g_editor.row_off = g_editor.cy - (size_t)view_rows + 1;
+		v->row_off = v->cy - (size_t)view_rows + 1;
 	}
 
-	if(g_editor.num_lines > 0 && g_editor.row_off > g_editor.num_lines - 1)
+	if(b->num_lines > 0 && v->row_off > b->num_lines - 1)
 	{
-		g_editor.row_off = g_editor.num_lines - 1;
+		v->row_off = b->num_lines - 1;
 	}
 
-	line = editor_current_line();
+	line = editor_current_line(b, v);
 
 	if(line == NULL)
 	{
 		return;
 	}
 
-	g_editor.col_off = line_char_start(line, g_editor.col_off);
+	v->col_off = line_char_start(line, v->col_off);
 
-	if(g_editor.cx < g_editor.col_off)
+	if(v->cx < v->col_off)
 	{
-		g_editor.col_off = g_editor.cx;
+		v->col_off = v->cx;
 		return;
 	}
 
-	while(line_cells_upto(line, g_editor.cx) >= line_cells_upto(line, g_editor.col_off) + (size_t)view_cols)
+	while(line_cells_upto(line, v->cx) >= line_cells_upto(line, v->col_off) + (size_t)view_cols)
 	{
-		g_editor.col_off = line_char_next(line, g_editor.col_off);
+		v->col_off = line_char_next(line, v->col_off);
 	}
 }
 
-static HlClass editor_map_class(Line *line, size_t row)
+static HlClass editor_map_class(Buffer *b, Line *line, size_t row)
 {
 	const unsigned char *cls;
 	size_t tallies[7];
@@ -390,7 +410,7 @@ static HlClass editor_map_class(Line *line, size_t row)
 	HlClass best;
 	size_t best_n;
 
-	if(g_editor.filetype == HL_PLAIN || highlight_use_color() == 0)
+	if(b == NULL || b->filetype == HL_PLAIN || highlight_use_color() == 0)
 	{
 		return HL_NORMAL;
 	}
@@ -400,7 +420,7 @@ static HlClass editor_map_class(Line *line, size_t row)
 		return HL_NORMAL;
 	}
 
-	cls = highlight_classes(row);
+	cls = highlight_classes(b, row);
 
 	if(cls == NULL)
 	{
@@ -498,7 +518,7 @@ static void editor_map_coverage(Line *line, int view_cols, int covered[MAP_CONTE
 	}
 }
 
-static void editor_draw_map(void)
+static void editor_draw_map(Buffer *b, View *v)
 {
 	int view_rows;
 	int view_cols;
@@ -506,19 +526,19 @@ static void editor_draw_map(void)
 	int map_x;
 	int y;
 
-	if(editor_map_width() == 0)
+	if(editor_map_width(b) == 0)
 	{
 		return;
 	}
 
-	view_rows = LINES - 2;
+	view_rows = editor_view_rows();
 
 	if(view_rows < 1)
 	{
 		return;
 	}
 
-	view_cols = editor_view_cols();
+	view_cols = editor_view_cols(b);
 	sep_x = COLS - MAP_WIDTH;
 	map_x = sep_x + 1;
 
@@ -537,24 +557,24 @@ static void editor_draw_map(void)
 		int i;
 		int tint_attr;
 
-		mvaddch(y, sep_x, ACS_VLINE);
+		mvaddch(y + VIEW_TOP, sep_x, ACS_VLINE);
 
-		if(g_editor.num_lines == 0)
+		if(b->num_lines == 0)
 		{
 			continue;
 		}
 
-		first = editor_map_bucket_start(y);
-		end = editor_map_bucket_start(y + 1);
+		first = editor_map_bucket_start(b, y);
+		end = editor_map_bucket_start(b, y + 1);
 
-		if(first >= g_editor.num_lines)
+		if(first >= b->num_lines)
 		{
 			continue;
 		}
 
-		if(end > g_editor.num_lines)
+		if(end > b->num_lines)
 		{
-			end = g_editor.num_lines;
+			end = b->num_lines;
 		}
 
 		max_len = 0;
@@ -564,7 +584,7 @@ static void editor_draw_map(void)
 		{
 			size_t width;
 
-			width = line_cells_upto(&g_editor.lines[row], g_editor.lines[row].len);
+			width = line_cells_upto(&b->lines[row], b->lines[row].len);
 
 			if(width > max_len)
 			{
@@ -573,7 +593,7 @@ static void editor_draw_map(void)
 			}
 		}
 
-		editor_map_coverage(&g_editor.lines[max_row], view_cols, covered);
+		editor_map_coverage(&b->lines[max_row], view_cols, covered);
 
 		has_cover = 0;
 
@@ -588,16 +608,16 @@ static void editor_draw_map(void)
 
 		in_view = 0;
 
-		if(first < g_editor.row_off + (size_t)view_rows && end > g_editor.row_off)
+		if(first < v->row_off + (size_t)view_rows && end > v->row_off)
 		{
 			in_view = 1;
 		}
 
-		cursor_row = g_editor.cy;
+		cursor_row = v->cy;
 
-		if(cursor_row >= g_editor.num_lines)
+		if(cursor_row >= b->num_lines)
 		{
-			cursor_row = g_editor.num_lines - 1;
+			cursor_row = b->num_lines - 1;
 		}
 
 		is_cursor = 0;
@@ -611,7 +631,7 @@ static void editor_draw_map(void)
 
 		if(has_cover != 0)
 		{
-			tint_attr = highlight_attr(editor_map_class(&g_editor.lines[max_row], max_row));
+			tint_attr = highlight_attr(editor_map_class(b, &b->lines[max_row], max_row));
 		}
 
 		for(i = 0; i < MAP_CONTENT_WIDTH; i++)
@@ -646,7 +666,7 @@ static void editor_draw_map(void)
 				attron(attr);
 			}
 
-			mvaddch(y, map_x + i, ' ');
+			mvaddch(y + VIEW_TOP, map_x + i, ' ');
 
 			if(attr != A_NORMAL)
 			{
@@ -656,7 +676,7 @@ static void editor_draw_map(void)
 	}
 }
 
-void editor_draw_lines(void)
+void editor_draw_lines(Buffer *b, View *v)
 {
 	int view_rows;
 	int view_cols;
@@ -664,11 +684,11 @@ void editor_draw_lines(void)
 	int text_x;
 	int y;
 
-	view_rows = LINES - 2;
-	view_cols = editor_view_cols();
-	gutter = editor_gutter_width();
+	view_rows = editor_view_rows();
+	view_cols = editor_view_cols(b);
+	gutter = editor_gutter_width(b);
 	text_x = gutter + 1;
-	highlight_ensure();
+	highlight_ensure(b);
 
 	for(y = 0; y < view_rows; y++)
 	{
@@ -681,8 +701,8 @@ void editor_draw_lines(void)
 	int used;
 	int hidden;
 
-		file_row = g_editor.row_off + (size_t)y;
-		move(y, 0);
+		file_row = v->row_off + (size_t)y;
+		move(y + VIEW_TOP, 0);
 		clrtoeol();
 
 		if(gutter >= COLS)
@@ -690,48 +710,48 @@ void editor_draw_lines(void)
 			continue;
 		}
 
-		if(file_row >= g_editor.num_lines)
+		if(file_row >= b->num_lines)
 		{
-			mvaddch(y, gutter, ACS_VLINE);
+			mvaddch(y + VIEW_TOP, gutter, ACS_VLINE);
 			continue;
 		}
 
 		snprintf(numbuf, sizeof(numbuf), "%*zu", gutter, file_row + 1);
-		is_cursor = (file_row == g_editor.cy);
+		is_cursor = (file_row == v->cy);
 
 		if(is_cursor)
 		{
 			attron(A_REVERSE);
 		}
 
-		mvaddnstr(y, 0, numbuf, gutter);
+		mvaddnstr(y + VIEW_TOP, 0, numbuf, gutter);
 
 		if(is_cursor)
 		{
 			attroff(A_REVERSE);
 		}
 
-		mvaddch(y, gutter, ACS_VLINE);
+		mvaddch(y + VIEW_TOP, gutter, ACS_VLINE);
 
 		if(text_x >= COLS)
 		{
 			continue;
 		}
 
-		line = &g_editor.lines[file_row];
+		line = &b->lines[file_row];
 
-		if(g_editor.filetype != HL_PLAIN && highlight_use_color())
+		if(b->filetype != HL_PLAIN && highlight_use_color())
 		{
-			editor_draw_colored_line(y, text_x, line, file_row, view_cols);
+			editor_draw_colored_line(b, v, y + VIEW_TOP, text_x, line, file_row, view_cols);
 			continue;
 		}
 
-		if(g_editor.col_off >= line->len)
+		if(v->col_off >= line->len)
 		{
 			continue;
 		}
 
-		i = line_char_start(line, g_editor.col_off);
+		i = line_char_start(line, v->col_off);
 		col = text_x;
 		used = 0;
 		hidden = (int)line_cells_upto(line, i);
@@ -743,11 +763,11 @@ void editor_draw_lines(void)
 			size_t k;
 			int kind;
 
-			kind = editor_cell_kind(file_row, i);
+			kind = editor_cell_kind(b, v, file_row, i);
 			m = i;
 			run_cells = 0;
 
-			while(m < line->len && editor_cell_kind(file_row, m) == kind)
+			while(m < line->len && editor_cell_kind(b, v, file_row, m) == kind)
 			{
 				int w;
 
@@ -785,7 +805,7 @@ void editor_draw_lines(void)
 					int w;
 
 					w = editor_tab_cells(hidden + used);
-					editor_draw_tab(y, col, w);
+					editor_draw_tab(y + VIEW_TOP, col, w);
 					col += w;
 					used += w;
 					k = line_char_next(line, k);
@@ -797,7 +817,7 @@ void editor_draw_lines(void)
 
 					n = line_char_next(line, k);
 					w = utf8_char_width(&line->data[k], line->len - k);
-					mvaddnstr(y, col, &line->data[k], (int)(n - k));
+					mvaddnstr(y + VIEW_TOP, col, &line->data[k], (int)(n - k));
 					col += w;
 					used += w;
 					k = n;
@@ -817,7 +837,12 @@ void editor_draw_lines(void)
 		}
 	}
 
-	editor_draw_map();
+	editor_draw_map(b, v);
+}
+
+void editor_draw_tabs(void)
+{
+	tabs_draw_bar();
 }
 
 void editor_draw_status(void)
@@ -826,6 +851,13 @@ void editor_draw_status(void)
 	int status_row;
 	char left[FILENAME_LIMIT + 64];
 	char right[64];
+	Buffer *b;
+	const char *fname;
+	int dirty;
+	HlFiletype ft;
+	size_t cy;
+	size_t num_lines;
+	const char *eol;
 
 	msg_row = LINES - 2;
 	status_row = LINES - 1;
@@ -833,22 +865,43 @@ void editor_draw_status(void)
 	move(msg_row, 0);
 	clrtoeol();
 
-	if(g_editor.status[0] != '\0')
+	if(editor_status()[0] != '\0')
 	{
-		mvaddnstr(msg_row, 0, g_editor.status,
-			(int)utf8_fit_cells(g_editor.status, strlen(g_editor.status), COLS));
+		mvaddnstr(msg_row, 0, editor_status(),
+			(int)utf8_fit_cells(editor_status(), strlen(editor_status()), COLS));
 	}
 
-	if(g_editor.filename[0] == '\0')
+	b = tabs_active();
+
+	if(b != NULL)
 	{
-		snprintf(left, sizeof(left), "[No Name]%s", g_editor.dirty ? " *" : "");
+		fname = b->filename;
+		dirty = b->dirty;
+		ft = b->filetype;
+		cy = tabs_view()->cy;
+		num_lines = b->num_lines;
+		eol = editor_eol_name(b);
 	}
 	else
 	{
-		snprintf(left, sizeof(left), "%s%s", g_editor.filename, g_editor.dirty ? " *" : "");
+		fname = "";
+		dirty = 0;
+		ft = HL_PLAIN;
+		cy = 0;
+		num_lines = 0;
+		eol = "LF";
 	}
 
-	snprintf(right, sizeof(right), "%s %s %zu/%zu  Ctrl-Q quit | F1 palette | F2 explorer", editor_eol_name(), g_editor.filetype == HL_C ? "C" : (g_editor.filetype == HL_MD ? "MD" : "-"), g_editor.cy + 1, g_editor.num_lines);
+	if(fname[0] == '\0')
+	{
+		snprintf(left, sizeof(left), "[No Name]%s", dirty ? " *" : "");
+	}
+	else
+	{
+		snprintf(left, sizeof(left), "%s%s", fname, dirty ? " *" : "");
+	}
+
+	snprintf(right, sizeof(right), "%s %s %zu/%zu  Ctrl-Q quit | F1 palette | F2 explorer", eol, ft == HL_C ? "C" : (ft == HL_MD ? "MD" : "-"), cy + 1, num_lines);
 	attron(A_REVERSE);
 	move(status_row, 0);
 	clrtoeol();

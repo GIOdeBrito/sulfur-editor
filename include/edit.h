@@ -1,19 +1,21 @@
 #ifndef EDIT_H
 #define EDIT_H
 
-void editor_insert_char(char c);
-void editor_insert_newline(void);
-void editor_delete_backspace(void);
-void editor_delete_char(void);
-void editor_move_left(int extend);
-void editor_move_right(int extend);
-void editor_move_up(int extend);
-void editor_move_down(int extend);
-void editor_move_page(int direction, int extend);
-void editor_line_home(int extend);
-void editor_line_end(int extend);
-int editor_delete_selection(void);
-int editor_indent_selection(void);
-void editor_unindent(void);
+#include "common.h"
+
+void editor_insert_char(Buffer *b, View *v, char c);
+void editor_insert_newline(Buffer *b, View *v);
+void editor_delete_backspace(Buffer *b, View *v);
+void editor_delete_char(Buffer *b, View *v);
+void editor_move_left(Buffer *b, View *v, int extend);
+void editor_move_right(Buffer *b, View *v, int extend);
+void editor_move_up(Buffer *b, View *v, int extend);
+void editor_move_down(Buffer *b, View *v, int extend);
+void editor_move_page(Buffer *b, View *v, int direction, int extend);
+void editor_line_home(View *v, int extend);
+void editor_line_end(Buffer *b, View *v, int extend);
+int editor_delete_selection(Buffer *b, View *v);
+int editor_indent_selection(Buffer *b, View *v);
+void editor_unindent(Buffer *b, View *v);
 
 #endif

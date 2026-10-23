@@ -2,6 +2,7 @@
 #define HIGHLIGHT_H
 
 #include <stddef.h>
+#include "common.h"
 
 typedef enum
 {
@@ -21,13 +22,20 @@ typedef enum
 	HL_PREPROC
 } HlClass;
 
-void highlight_set_filetype(void);
-void highlight_mark_dirty(void);
-void highlight_ensure(void);
-void highlight_free(void);
+typedef struct
+{
+	unsigned char *state;
+	size_t state_cap;
+	int dirty;
+} HlCache;
+
+void highlight_set_filetype(Buffer *b);
+void highlight_mark_dirty(Buffer *b);
+void highlight_ensure(Buffer *b);
+void highlight_free(Buffer *b);
 void highlight_init_color(void);
 int highlight_use_color(void);
 int highlight_attr(HlClass cls);
-const unsigned char *highlight_classes(size_t row);
+const unsigned char *highlight_classes(Buffer *b, size_t row);
 
 #endif

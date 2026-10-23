@@ -13,6 +13,7 @@
 #include "line.h"
 #include "palette.h"
 #include "search.h"
+#include "tabs.h"
 
 #define EXPLORER_MAX_QUERY 64
 #define EXPLORER_MAX_ENTRIES 256
@@ -630,6 +631,7 @@ static void explorer_enter(void)
 	int idx;
 	char target[FILENAME_LIMIT];
 	char msg[FILENAME_LIMIT];
+	Buffer *b;
 
 	if(s_explorer.count == 0)
 	{
@@ -681,9 +683,11 @@ static void explorer_enter(void)
 		return;
 	}
 
-	if(g_editor.dirty != 0)
+	b = tabs_active();
+
+	if(b != NULL && b->dirty != 0)
 	{
-		complete_reset();
+		complete_reset(b);
 		search_deactivate();
 
 		if(editor_request_quit() == 0)
@@ -695,9 +699,8 @@ static void explorer_enter(void)
 
 	snprintf(msg, sizeof(msg), "%s", target);
 	explorer_reset();
-	complete_reset();
 	search_deactivate();
-	editor_switch_file(msg);
+	tabs_open_file(msg);
 }
 
 static void explorer_move(int delta)
@@ -746,8 +749,15 @@ void explorer_open(const char *start_dir)
 	const char *dir;
 	size_t len;
 	size_t i;
+	Buffer *b;
 
-	complete_reset();
+	b = tabs_active();
+
+	if(b != NULL)
+	{
+		complete_reset(b);
+	}
+
 	search_deactivate();
 	palette_reset();
 	s_explorer.active = 1;
