@@ -2,6 +2,7 @@
 #include <stdio.h>
 
 #include "buffer.h"
+#include "clipboard.h"
 #include "common.h"
 #include "complete.h"
 #include "edit.h"
@@ -150,7 +151,7 @@ int editor_handle_key(int key)
 		return 0;
 	}
 
-	if(key == CTRL_KEY('q') || key == CTRL_KEY('x'))
+	if(key == CTRL_KEY('q'))
 	{
 		return editor_request_quit();
 	}
@@ -176,6 +177,24 @@ int editor_handle_key(int key)
 	if(key == CTRL_KEY('y'))
 	{
 		undo_redo();
+		return 0;
+	}
+
+	if(key == CTRL_KEY('c'))
+	{
+		editor_copy();
+		return 0;
+	}
+
+	if(key == CTRL_KEY('x'))
+	{
+		editor_cut();
+		return 0;
+	}
+
+	if(key == CTRL_KEY('v'))
+	{
+		editor_paste();
 		return 0;
 	}
 

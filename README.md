@@ -21,7 +21,8 @@ Run as `build/sulf [filename]`.
 | Shift+Arrows (and friends) | Extend selection |
 | Type / Enter / Backspace / Del | Edit (`Tab` indents, `Shift-Tab` unindents) |
 | `Ctrl-S` | Save (prompts for a name if unnamed) |
-| `Ctrl-Q` / `Ctrl-X` | Quit (prompts if unsaved changes) |
+| `Ctrl-Q` | Quit (prompts if unsaved changes) |
+| `Ctrl-C` / `Ctrl-X` / `Ctrl-V` | Copy / cut / paste selection |
 | `Ctrl-F`, then `n` / `N` / `Enter` | Find next / previous match, `Esc` cancels |
 | `Ctrl-P` / `F1` | Command palette, `Esc` cancels |
 | `Ctrl-Z` / `Ctrl-Y` | Undo / redo |

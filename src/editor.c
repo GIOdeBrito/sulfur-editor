@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "clipboard.h"
 #include "complete.h"
 #include "editor.h"
 #include "highlight.h"
@@ -39,7 +40,7 @@ void editor_init(void)
 	g_editor.eol = EOL_LF;
 	g_editor.trailing_nl = 0;
 	g_editor.filetype = HL_PLAIN;
-	complete_reset();
+	clipboard_reset();
 	search_reset();
 	undo_reset();
 }

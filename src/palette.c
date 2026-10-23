@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "buffer.h"
+#include "clipboard.h"
 #include "common.h"
 #include "complete.h"
 #include "edit.h"
@@ -30,6 +31,9 @@ typedef enum
 	PAL_DELETE_SELECTION,
 	PAL_UNINDENT,
 	PAL_CLEAR_SELECTION,
+	PAL_COPY,
+	PAL_CUT,
+	PAL_PASTE,
 	PAL_COMPLETE_WORD
 } PaletteAction;
 
@@ -53,6 +57,9 @@ static const PaletteItem s_table[] =
 	{ "Delete Selection", PAL_DELETE_SELECTION },
 	{ "Unindent", PAL_UNINDENT },
 	{ "Clear Selection", PAL_CLEAR_SELECTION },
+	{ "Copy", PAL_COPY },
+	{ "Cut", PAL_CUT },
+	{ "Paste", PAL_PASTE },
 	{ "Complete Word", PAL_COMPLETE_WORD }
 };
 
@@ -290,6 +297,24 @@ static int palette_run_selected(void)
 	{
 		editor_select_clear();
 		editor_set_status("Selection cleared");
+		return 0;
+	}
+
+	if(action == PAL_COPY)
+	{
+		editor_copy();
+		return 0;
+	}
+
+	if(action == PAL_CUT)
+	{
+		editor_cut();
+		return 0;
+	}
+
+	if(action == PAL_PASTE)
+	{
+		editor_paste();
 		return 0;
 	}
 

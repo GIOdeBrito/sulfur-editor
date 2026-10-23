@@ -25,7 +25,8 @@ static void print_help(const char *prog)
 	printf("  Shift+Arrows (and friends)          Extend selection\n");
 	printf("  Type / Enter / Backspace / Del      Edit (Tab indents, Shift-Tab unindents)\n");
 	printf("  Ctrl-S                              Save (prompts for a name if unnamed)\n");
-	printf("  Ctrl-Q / Ctrl-X                     Quit (prompts if unsaved changes)\n");
+	printf("  Ctrl-Q                              Quit (prompts if unsaved changes)\n");
+	printf("  Ctrl-C / Ctrl-X / Ctrl-V            Copy / cut / paste selection\n");
 	printf("  Ctrl-F, then n / N / Enter          Find next / previous match, Esc cancels\n");
 	printf("  Ctrl-P / F1                         Command palette, Esc cancels\n");
 	printf("  Ctrl-Z / Ctrl-Y                     Undo / redo\n");
