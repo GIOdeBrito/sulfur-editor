@@ -19,6 +19,12 @@
 #define EXPLORER_MAX_VISIBLE 8
 #define EXPLORER_MODAL_CONTENT 40
 #define EXPLORER_NAME_LIMIT 256
+#define EXPLORER_PREVIEW_LINES 64
+#define EXPLORER_PREVIEW_WIDTH 256
+#define EXPLORER_PREVIEW_MIN 20
+#define EXPLORER_PREVIEW_MAX 40
+#define EXPLORER_PREVIEW_GATE 100
+#define EXPLORER_PREVIEW_MAX_BYTES (128 * 1024)
 
 typedef struct
 {
@@ -37,6 +43,15 @@ typedef struct
 } Explorer;
 
 static Explorer s_explorer;
+
+static struct
+{
+	int valid;
+	char path[FILENAME_LIMIT];
+	char text[EXPLORER_PREVIEW_LINES][EXPLORER_PREVIEW_WIDTH + 1];
+	int nlines;
+	int truncated;
+} s_preview;
 
 static int explorer_lower(int c)
 {
@@ -74,6 +89,283 @@ static int explorer_fuzzy_match(const char *query, const char *name)
 	return 1;
 }
 
+static int explorer_preview_enabled(void)
+{
+	if(COLS < EXPLORER_PREVIEW_GATE)
+	{
+		return 0;
+	}
+
+	if(COLS - 4 < EXPLORER_MODAL_CONTENT + 1 + EXPLORER_PREVIEW_MIN)
+	{
+		return 0;
+	}
+
+	return 1;
+}
+
+static int explorer_preview_width(void)
+{
+	int avail;
+
+	if(explorer_preview_enabled() == 0)
+	{
+		return 0;
+	}
+
+	avail = COLS - 4 - EXPLORER_MODAL_CONTENT - 1;
+
+	if(avail < EXPLORER_PREVIEW_MIN)
+	{
+		avail = EXPLORER_PREVIEW_MIN;
+	}
+
+	if(avail > EXPLORER_PREVIEW_MAX)
+	{
+		avail = EXPLORER_PREVIEW_MAX;
+	}
+
+	if(EXPLORER_MODAL_CONTENT + 1 + avail > COLS - 4)
+	{
+		avail = COLS - 4 - EXPLORER_MODAL_CONTENT - 1;
+	}
+
+	if(avail < 0)
+	{
+		avail = 0;
+	}
+
+	return avail;
+}
+
+static void explorer_preview_invalidate(void)
+{
+	s_preview.valid = 0;
+	s_preview.path[0] = '\0';
+	s_preview.nlines = 0;
+	s_preview.truncated = 0;
+}
+
+static int explorer_selection_target(char *out, size_t cap, int *is_dir_out)
+{
+	int idx;
+
+	if(out == NULL || cap == 0)
+	{
+		return -1;
+	}
+
+	if(s_explorer.count == 0)
+	{
+		return -1;
+	}
+
+	if(s_explorer.selected < 0 || s_explorer.selected >= s_explorer.count)
+	{
+		return -1;
+	}
+
+	idx = s_explorer.filtered[s_explorer.selected];
+
+	if(is_dir_out != NULL)
+	{
+		*is_dir_out = s_explorer.is_dir[idx];
+	}
+
+	if(strcmp(s_explorer.cwd, ".") == 0)
+	{
+		if(snprintf(out, cap, "%s", s_explorer.names[idx]) >= (int)cap)
+		{
+			return -1;
+		}
+
+		return 0;
+	}
+
+	if(snprintf(out, cap, "%s/%s", s_explorer.cwd, s_explorer.names[idx]) >= (int)cap)
+	{
+		return -1;
+	}
+
+	return 0;
+}
+
+static void explorer_preview_load(void)
+{
+	char target[FILENAME_LIMIT];
+	int is_dir;
+	FILE *fp;
+	struct stat st;
+
+	if(s_explorer.active == 0)
+	{
+		explorer_preview_invalidate();
+		return;
+	}
+
+	if(explorer_selection_target(target, sizeof(target), &is_dir) != 0)
+	{
+		if(s_preview.valid != 0 && strcmp(s_preview.path, "<no-match>") == 0)
+		{
+			return;
+		}
+
+		snprintf(s_preview.path, sizeof(s_preview.path), "<no-match>");
+		snprintf(s_preview.text[0], sizeof(s_preview.text[0]), "<no match>");
+		s_preview.nlines = 1;
+		s_preview.truncated = 0;
+		s_preview.valid = 1;
+		return;
+	}
+
+	if(strcmp(target, s_preview.path) == 0 && s_preview.valid != 0)
+	{
+		return;
+	}
+
+	snprintf(s_preview.path, sizeof(s_preview.path), "%s", target);
+
+	if(is_dir != 0)
+	{
+		snprintf(s_preview.text[0], sizeof(s_preview.text[0]), "<directory>");
+		s_preview.nlines = 1;
+		s_preview.truncated = 0;
+		s_preview.valid = 1;
+		return;
+	}
+
+	if(lstat(target, &st) != 0)
+	{
+		snprintf(s_preview.text[0], sizeof(s_preview.text[0]), "<unreadable>");
+		s_preview.nlines = 1;
+		s_preview.truncated = 0;
+		s_preview.valid = 1;
+		return;
+	}
+
+	if(S_ISDIR(st.st_mode) != 0)
+	{
+		snprintf(s_preview.text[0], sizeof(s_preview.text[0]), "<directory>");
+		s_preview.nlines = 1;
+		s_preview.truncated = 0;
+		s_preview.valid = 1;
+		return;
+	}
+
+	if(st.st_size > EXPLORER_PREVIEW_MAX_BYTES)
+	{
+		snprintf(s_preview.text[0], sizeof(s_preview.text[0]), "<large file, not previewed>");
+		s_preview.nlines = 1;
+		s_preview.truncated = 1;
+		s_preview.valid = 1;
+		return;
+	}
+
+	fp = fopen(target, "rb");
+
+	if(fp == NULL)
+	{
+		snprintf(s_preview.text[0], sizeof(s_preview.text[0]), "<unreadable>");
+		s_preview.nlines = 1;
+		s_preview.truncated = 0;
+		s_preview.valid = 1;
+		return;
+	}
+
+	s_preview.nlines = 0;
+	s_preview.truncated = 0;
+	s_preview.text[0][0] = '\0';
+
+	while(s_preview.nlines < EXPLORER_PREVIEW_LINES)
+	{
+		int ch;
+		int ended;
+		size_t llen;
+		size_t total;
+
+		llen = 0;
+		total = 0;
+		ended = 0;
+
+		while((ch = fgetc(fp)) != EOF)
+		{
+			total++;
+
+			if(total > EXPLORER_PREVIEW_MAX_BYTES)
+			{
+				s_preview.truncated = 1;
+				ended = 1;
+				break;
+			}
+
+			if(ch == '\0')
+			{
+				snprintf(s_preview.text[0], sizeof(s_preview.text[0]), "<binary file>");
+				s_preview.nlines = 1;
+				s_preview.truncated = 0;
+				s_preview.valid = 1;
+				fclose(fp);
+				return;
+			}
+
+			if(ch == '\n')
+			{
+				ended = 1;
+				break;
+			}
+
+			if(ch == '\r')
+			{
+				continue;
+			}
+
+			if(llen < EXPLORER_PREVIEW_WIDTH)
+			{
+				s_preview.text[s_preview.nlines][llen] = (char)ch;
+				llen++;
+				s_preview.text[s_preview.nlines][llen] = '\0';
+			}
+		}
+
+		if(total == 0)
+		{
+			break;
+		}
+
+		s_preview.nlines++;
+
+		if(ch == EOF || s_preview.truncated != 0)
+		{
+			break;
+		}
+
+		if(ended != 0 && s_preview.nlines < EXPLORER_PREVIEW_LINES)
+		{
+			s_preview.text[s_preview.nlines][0] = '\0';
+		}
+	}
+
+	if(s_preview.nlines == 0)
+	{
+		snprintf(s_preview.text[0], sizeof(s_preview.text[0]), "<empty file>");
+		s_preview.nlines = 1;
+		s_preview.valid = 1;
+		fclose(fp);
+		return;
+	}
+
+	if(s_preview.nlines >= EXPLORER_PREVIEW_LINES && s_preview.truncated == 0)
+	{
+		if(fgetc(fp) != EOF)
+		{
+			s_preview.truncated = 1;
+		}
+	}
+
+	s_preview.valid = 1;
+	fclose(fp);
+}
+
 static void explorer_refilter(void)
 {
 	int i;
@@ -86,7 +378,7 @@ static void explorer_refilter(void)
 	{
 		if(s_explorer.count >= EXPLORER_MAX_ENTRIES)
 		{
-			return;
+			break;
 		}
 
 		if(explorer_fuzzy_match(s_explorer.query, s_explorer.names[i]) == 0)
@@ -97,6 +389,8 @@ static void explorer_refilter(void)
 		s_explorer.filtered[s_explorer.count] = i;
 		s_explorer.count++;
 	}
+
+	explorer_preview_load();
 }
 
 static void explorer_sort(void)
@@ -443,6 +737,8 @@ static void explorer_move(int delta)
 	{
 		s_explorer.scroll = s_explorer.selected - visible + 1;
 	}
+
+	explorer_preview_load();
 }
 
 void explorer_open(const char *start_dir)
@@ -459,6 +755,7 @@ void explorer_open(const char *start_dir)
 	s_explorer.selected = 0;
 	s_explorer.scroll = 0;
 	s_explorer.truncated = 0;
+	explorer_preview_invalidate();
 
 	dir = start_dir;
 
@@ -531,6 +828,7 @@ void explorer_reset(void)
 	s_explorer.scroll = 0;
 	s_explorer.query[0] = '\0';
 	s_explorer.truncated = 0;
+	explorer_preview_invalidate();
 }
 
 int explorer_is_active(void)
@@ -626,6 +924,7 @@ int explorer_handle_key(int key)
 static void explorer_box(int *x, int *y, int *w, int *h, int visible)
 {
 	int content;
+	int preview;
 
 	if(x == NULL || y == NULL || w == NULL || h == NULL)
 	{
@@ -642,6 +941,13 @@ static void explorer_box(int *x, int *y, int *w, int *h, int visible)
 	if(content < 1)
 	{
 		content = 1;
+	}
+
+	preview = explorer_preview_width();
+
+	if(preview > 0)
+	{
+		content += 1 + preview;
 	}
 
 	*w = content + 2;
@@ -760,6 +1066,8 @@ void explorer_draw(void)
 	int w;
 	int h;
 	int content;
+	int tree_w;
+	int preview_w;
 	int qlen;
 	int i;
 
@@ -776,11 +1084,37 @@ void explorer_draw(void)
 	visible = explorer_visible_rows();
 	explorer_box(&x, &y, &w, &h, visible);
 	content = w - 2;
+	tree_w = EXPLORER_MODAL_CONTENT;
+
+	if(tree_w > COLS - 4)
+	{
+		tree_w = COLS - 4;
+	}
+
+	if(tree_w < 1)
+	{
+		tree_w = 1;
+	}
+
+	preview_w = explorer_preview_width();
+
+	if(tree_w + 1 + preview_w != content)
+	{
+		preview_w = 0;
+	}
+
 	mvaddch(y, x, ACS_ULCORNER);
 
 	for(i = 1; i <= content; i++)
 	{
-		mvaddch(y, x + i, ACS_HLINE);
+		if(preview_w > 0 && i == tree_w + 1)
+		{
+			mvaddch(y, x + i, ACS_TTEE);
+		}
+		else
+		{
+			mvaddch(y, x + i, ACS_HLINE);
+		}
 	}
 
 	mvaddch(y, x + content + 1, ACS_URCORNER);
@@ -811,6 +1145,11 @@ void explorer_draw(void)
 			mvaddch(row, x + 1 + j, ' ');
 		}
 
+		if(preview_w > 0)
+		{
+			mvaddch(row, x + 1 + tree_w, ACS_VLINE);
+		}
+
 		mvaddch(row, x + content + 1, ACS_VLINE);
 
 		if(s_explorer.scroll + i >= s_explorer.count)
@@ -826,11 +1165,35 @@ void explorer_draw(void)
 		}
 
 		idx = s_explorer.filtered[s_explorer.scroll + i];
-		mvaddnstr(row, x + 1, s_explorer.names[idx], content);
+		mvaddnstr(row, x + 1, s_explorer.names[idx], tree_w);
 
 		if(selected != 0)
 		{
 			attroff(A_REVERSE);
+		}
+
+		if(preview_w > 0)
+		{
+			int plen;
+
+			mvaddch(row, x + 1 + tree_w, ACS_VLINE);
+
+			if(s_preview.valid != 0 && i < s_preview.nlines)
+			{
+				if(s_preview.truncated != 0 && i == visible - 1)
+				{
+					mvaddnstr(row, x + 1 + tree_w + 1, "[...]", preview_w);
+				}
+				else
+				{
+					plen = (int)utf8_fit_cells(s_preview.text[i], strlen(s_preview.text[i]), preview_w);
+					mvaddnstr(row, x + 1 + tree_w + 1, s_preview.text[i], plen);
+				}
+			}
+			else if(s_preview.valid != 0 && s_preview.truncated != 0 && i == visible - 1)
+			{
+				mvaddnstr(row, x + 1 + tree_w + 1, "[...]", preview_w);
+			}
 		}
 	}
 
@@ -838,7 +1201,14 @@ void explorer_draw(void)
 
 	for(i = 1; i <= content; i++)
 	{
-		mvaddch(y + visible + 2, x + i, ACS_HLINE);
+		if(preview_w > 0 && i == tree_w + 1)
+		{
+			mvaddch(y + visible + 2, x + i, ACS_BTEE);
+		}
+		else
+		{
+			mvaddch(y + visible + 2, x + i, ACS_HLINE);
+		}
 	}
 
 	mvaddch(y + visible + 2, x + content + 1, ACS_LRCORNER);
