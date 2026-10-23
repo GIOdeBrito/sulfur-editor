@@ -26,6 +26,3 @@ Ideas for future work, roughly ordered by value/effort.
 - Man page + `--help` flag
 - Basic unit tests for buffer/edit ops (currently verified via headless pty only)
 
-
-
-

@@ -9,6 +9,7 @@
 #include "focus.h"
 #include "input.h"
 #include "mouse.h"
+#include "palette.h"
 #include "search.h"
 #include "undo.h"
 #include "view.h"
@@ -95,6 +96,22 @@ int editor_handle_key(int key)
 		return 0;
 	}
 
+	if(palette_is_active())
+	{
+		if(key == KEY_MOUSE)
+		{
+			palette_reset();
+		}
+		else if(key == KEY_RESIZE)
+		{
+			return 0;
+		}
+		else
+		{
+			return palette_handle_key(key);
+		}
+	}
+
 	if(search_is_active())
 	{
 		if(search_handle_key(key))
@@ -151,6 +168,12 @@ int editor_handle_key(int key)
 	if(key == CTRL_KEY('f'))
 	{
 		search_prompt_and_find();
+		return 0;
+	}
+
+	if(key == CTRL_KEY('p') || key == KEY_F(1))
+	{
+		palette_open();
 		return 0;
 	}
 
@@ -321,6 +344,7 @@ void editor_run(void)
 		editor_draw_lines();
 		editor_draw_status();
 		complete_draw();
+		palette_draw();
 		text_off = editor_text_offset();
 		cursor_x = text_off + (int)g_editor.cx - (int)g_editor.col_off;
 
@@ -329,7 +353,15 @@ void editor_run(void)
 			cursor_x = text_off;
 		}
 
-		move((int)(g_editor.cy - g_editor.row_off), cursor_x);
+		if(palette_is_active())
+		{
+			move(palette_query_cursor_y(), palette_query_cursor_x());
+		}
+		else
+		{
+			move((int)(g_editor.cy - g_editor.row_off), cursor_x);
+		}
+
 		curs_set(1);
 		refresh();
 		key = getch();
