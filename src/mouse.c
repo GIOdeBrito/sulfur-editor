@@ -75,10 +75,10 @@ static void mouse_scroll(int direction)
 
 static int mouse_click(MEVENT *ev)
 {
+	Line *line;
 	int text_off;
 	int map_w;
 	size_t file_row;
-	size_t want;
 
 	if(ev == NULL)
 	{
@@ -126,6 +126,7 @@ static int mouse_click(MEVENT *ev)
 
 	text_off = editor_text_offset();
 	g_editor.cy = file_row;
+	line = &g_editor.lines[file_row];
 
 	if(ev->x <= text_off)
 	{
@@ -133,8 +134,7 @@ static int mouse_click(MEVENT *ev)
 	}
 	else
 	{
-		want = g_editor.col_off + (size_t)(ev->x - text_off);
-		g_editor.cx = want;
+		g_editor.cx = line_byte_at_cell(line, g_editor.col_off, ev->x - text_off);
 	}
 
 	editor_clamp_cursor();

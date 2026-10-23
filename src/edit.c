@@ -304,12 +304,6 @@ void editor_unindent(void)
 		undo_begin(UNDO_OTHER);
 		stripped = editor_strip_leading(line, (size_t)TAB_WIDTH);
 
-		if(stripped == 0)
-		{
-			undo_end(UNDO_OTHER);
-			return;
-		}
-
 		if(g_editor.cx >= stripped)
 		{
 			g_editor.cx -= stripped;
@@ -408,6 +402,13 @@ void editor_insert_newline(void)
 		return;
 	}
 
+	if(g_editor.cx > line->len)
+	{
+		g_editor.cx = line->len;
+	}
+
+	g_editor.cx = line_char_start(line, g_editor.cx);
+
 	indent = 0;
 
 	if(line->data != NULL)
@@ -463,6 +464,7 @@ void editor_delete_backspace(void)
 	Line *line;
 	Line *prev;
 	size_t prev_len;
+	size_t start;
 	int kind;
 
 	if(g_editor.sel_active != 0)
@@ -506,8 +508,14 @@ void editor_delete_backspace(void)
 
 	if(g_editor.cx > 0)
 	{
-		line_delete_char(line, g_editor.cx - 1);
-		g_editor.cx--;
+		start = line_char_start(line, g_editor.cx - 1);
+
+		while(g_editor.cx > start)
+		{
+			line_delete_char(line, start);
+			g_editor.cx--;
+		}
+
 		g_editor.dirty = 1;
 		g_editor.want_cx = g_editor.cx;
 		highlight_mark_dirty();
@@ -542,6 +550,7 @@ void editor_delete_char(void)
 {
 	Line *line;
 	Line *next;
+	size_t end;
 
 	if(g_editor.sel_active == 0 && editor_current_line() == NULL)
 	{
@@ -566,7 +575,17 @@ void editor_delete_char(void)
 
 	if(g_editor.cx < line->len)
 	{
-		line_delete_char(line, g_editor.cx);
+		size_t left;
+
+		end = line_char_next(line, g_editor.cx);
+		left = end - g_editor.cx;
+
+		while(left > 0)
+		{
+			line_delete_char(line, g_editor.cx);
+			left--;
+		}
+
 		g_editor.dirty = 1;
 		highlight_mark_dirty();
 		undo_end(UNDO_OTHER);
@@ -615,7 +634,7 @@ void editor_move_left(int extend)
 			return;
 		}
 
-		g_editor.cx--;
+		g_editor.cx = line_char_start(line, g_editor.cx - 1);
 		g_editor.want_cx = g_editor.cx;
 		return;
 	}
@@ -660,7 +679,7 @@ void editor_move_right(int extend)
 
 	if(g_editor.cx < line->len)
 	{
-		g_editor.cx++;
+		g_editor.cx = line_char_next(line, g_editor.cx);
 		g_editor.want_cx = g_editor.cx;
 		return;
 	}

@@ -26,7 +26,15 @@ int editor_prompt_filename(void)
 	curs_set(1);
 	mvprintw(rows, 0, "Save as: ");
 	clrtoeol();
-	getnstr(name, (int)sizeof(name) - 1);
+	name[0] = '\0';
+
+	if(getnstr(name, (int)sizeof(name) - 1) != OK)
+	{
+		noecho();
+		editor_set_status("Save cancelled");
+		return -1;
+	}
+
 	noecho();
 
 	if(name[0] == '\0')
@@ -53,6 +61,12 @@ int editor_request_quit(void)
 	}
 
 	msg_row = LINES - 2;
+
+	if(msg_row < 0)
+	{
+		msg_row = 0;
+	}
+
 	move(msg_row, 0);
 	clrtoeol();
 	mvaddnstr(msg_row, 0, "Unsaved changes. Save? (y/n, Esc cancel)", COLS);
@@ -304,7 +318,7 @@ int editor_handle_key(int key)
 		return 0;
 	}
 
-	if(key >= 32 && key <= 126)
+	if((key >= 32 && key <= 126) || (key >= 128 && key <= 255))
 	{
 		editor_insert_char((char)key);
 		complete_update();
@@ -335,8 +349,10 @@ void editor_run(void)
 
 	while(done == 0)
 	{
+		Line *cursor_line;
 		int text_off;
 		int cursor_x;
+		int cursor_row;
 
 		editor_clamp_cursor();
 		editor_scroll();
@@ -347,7 +363,17 @@ void editor_run(void)
 		palette_dim_background();
 		palette_draw();
 		text_off = editor_text_offset();
-		cursor_x = text_off + (int)g_editor.cx - (int)g_editor.col_off;
+		cursor_line = editor_current_line();
+
+		if(cursor_line == NULL)
+		{
+			cursor_x = text_off + (int)g_editor.cx - (int)g_editor.col_off;
+		}
+		else
+		{
+			cursor_x = text_off + (int)line_cells_upto(cursor_line, g_editor.cx) -
+				(int)line_cells_upto(cursor_line, g_editor.col_off);
+		}
 
 		if(cursor_x < text_off)
 		{
@@ -356,16 +382,31 @@ void editor_run(void)
 
 		if(palette_is_active())
 		{
-			move(palette_query_cursor_y(), palette_query_cursor_x());
+			if(palette_query_cursor_y() >= 0 && palette_query_cursor_y() < LINES &&
+				palette_query_cursor_x() >= 0 && palette_query_cursor_x() < COLS)
+			{
+				move(palette_query_cursor_y(), palette_query_cursor_x());
+			}
 		}
 		else
 		{
-			move((int)(g_editor.cy - g_editor.row_off), cursor_x);
+			cursor_row = (int)(g_editor.cy - g_editor.row_off);
+
+			if(cursor_row >= 0 && cursor_row < LINES && cursor_x >= 0 && cursor_x < COLS)
+			{
+				move(cursor_row, cursor_x);
+			}
 		}
 
 		curs_set(1);
 		refresh();
 		key = getch();
+
+		if(key == ERR)
+		{
+			continue;
+		}
+
 		done = editor_handle_key(key);
 	}
 }

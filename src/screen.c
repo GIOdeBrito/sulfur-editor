@@ -1,4 +1,6 @@
+#include <locale.h>
 #include <ncurses.h>
+#include <stdlib.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -6,6 +8,21 @@
 #include "highlight.h"
 #include "mouse.h"
 #include "screen.h"
+
+static void editor_init_locale(void)
+{
+	setlocale(LC_ALL, "");
+
+	if(MB_CUR_MAX >= 4)
+	{
+		return;
+	}
+
+	if(setlocale(LC_ALL, "C.UTF-8") == NULL)
+	{
+		setlocale(LC_ALL, "C.utf8");
+	}
+}
 
 void editor_disable_flow_control(void)
 {
@@ -25,6 +42,7 @@ void editor_disable_flow_control(void)
 
 void editor_start_screen(void)
 {
+	editor_init_locale();
 	initscr();
 	raw();
 	keypad(stdscr, TRUE);

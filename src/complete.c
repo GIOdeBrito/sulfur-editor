@@ -369,6 +369,7 @@ int complete_handle_key(int key)
 
 void complete_draw(void)
 {
+	Line *line;
 	int text_x;
 	int cursor_y;
 	int x;
@@ -410,13 +411,20 @@ void complete_draw(void)
 		start = s_complete.selected - visible + 1;
 	}
 
+	line = editor_current_line();
+
+	if(line == NULL)
+	{
+		return;
+	}
+
 	width = 0;
 
 	for(i = 0; i < visible; i++)
 	{
 		int w;
 
-		w = (int)strlen(s_complete.items[start + i]);
+		w = utf8_width_n(s_complete.items[start + i], strlen(s_complete.items[start + i]));
 
 		if(w > width)
 		{
@@ -433,7 +441,8 @@ void complete_draw(void)
 
 	text_x = editor_text_offset();
 	cursor_y = (int)g_editor.cy - (int)g_editor.row_off;
-	x = text_x + (int)s_complete.prefix_start - (int)g_editor.col_off;
+	x = text_x + (int)line_cells_upto(line, s_complete.prefix_start) -
+		(int)line_cells_upto(line, g_editor.col_off);
 
 	if(x < text_x)
 	{
@@ -491,7 +500,9 @@ void complete_draw(void)
 			attron(A_REVERSE);
 		}
 
-		mvaddnstr(y + 1 + r, x + 1, s_complete.items[start + r], width);
+		mvaddnstr(y + 1 + r, x + 1, s_complete.items[start + r],
+			(int)utf8_fit_cells(s_complete.items[start + r],
+				strlen(s_complete.items[start + r]), width));
 
 		if(selected)
 		{

@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -std=c11 -D_POSIX_C_SOURCE=200809L -Iinclude
-LDLIBS = -lncurses
+LDLIBS = -lncursesw
 SRC = src
 INC = include
 BLD = build

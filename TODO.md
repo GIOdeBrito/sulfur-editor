@@ -22,7 +22,7 @@ Ideas for future work, roughly ordered by value/effort.
 ## Platform
 - 256-color / truecolor palette detection, theme option
 - Clipboard integration: OSC-52 yank, bracketed paste
-- Wider highlight coverage: `.md`, `.py`, `.js`, `.sh` keyword sets
-- Man page + `--help` flag
+- Wider highlight coverage: `.py`, `.js`, `.sh` keyword sets
+- Man page (README covers 1.0 docs)
 - Basic unit tests for buffer/edit ops (currently verified via headless pty only)
 

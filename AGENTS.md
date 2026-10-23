@@ -1,25 +1,25 @@
 # AGENTS.md
 
 C11 ncurses text editor. Single binary, no test framework, no CI.
-`TODO.md` is ideas-only — never implement from it unasked. `Makefile` is the source of truth (no README / opencode.json).
+`TODO.md` is ideas-only — never implement from it unasked. `Makefile` is the source of truth (README is user docs; no opencode.json).
 
 ## Build
 
 - `make` → `build/sulf`. `make clean` wipes `build/` (gitignored — never commit it).
 - Run as `build/sulf [filename]` (`main.c` rejects `argc > 2`).
-- Requires `libncurses-dev`; link flag is `-lncurses` (`Makefile` `LDLIBS`).
+- Requires `libncurses-dev`; link flag is `-lncursesw` (wide ncurses — UTF-8 rendering needs it) (`Makefile` `LDLIBS`).
 - `make` must be zero-warning (`-Wall -Wextra -std=c11 -D_POSIX_C_SOURCE=200809L`).
 - New `.c` file: add to `Makefile` `OBJS` **and** a per-object header-dep line, else incremental builds go stale.
 
 ## Layout (`src/` + `include/`, global `Editor g_editor` in `editor.h`)
 
 - `main.c`: `editor_init → editor_open → editor_start_screen → editor_run → editor_free`.
-- `editor.c`: init/free, `editor_clamp_cursor`, selection helpers. `line.c`/`util.c`: line-buffer growth + `die`. `buffer.c`: open/save, EOL detection/preservation. `edit.c`: mutations + cursor moves. `view.c`: scroll/gutter/draw. `input.c`: keys + prompts + `editor_run` loop (clamp + `editor_scroll` + draw per frame). `screen.c`: ncurses/termios init. `complete.c` / `highlight.c` / `mouse.c` / `undo.c`: features.
+- `editor.c`: init/free, `editor_clamp_cursor`, selection helpers. `line.c`/`util.c`: line-buffer growth + UTF-8 cell helpers + `die`. `buffer.c`: open/save, EOL detection/preservation. `edit.c`: mutations + cursor moves. `view.c`: scroll/gutter/draw. `input.c`: keys + prompts + `editor_run` loop (clamp + `editor_scroll` + draw per frame). `screen.c`: locale/ncurses/termios init. `complete.c` / `highlight.c` / `mouse.c` / `undo.c`: features.
 - Style (enforced): tabs, Allman braces, guard clauses, `NULL` uppercase.
 
 ## Invariants agents commonly break
 
-- Tabs are stored as spaces (`TAB_WIDTH 4`); byte index == screen cell.
+- Tabs are stored as spaces (`TAB_WIDTH 4`). Buffer is bytes, not cells: `cx`/`want_cx`/`col_off`/selection anchors are byte indices always snapped to char starts (`editor_clamp_cursor` + char motions/deletes); screen columns come from `line.c` width helpers, never byte counts. `want_cx` stays byte-based. `screen.c` sets locale (`C.UTF-8`/`C.utf8` fallback); completion words stay ASCII-only by construction (high bytes are non-word).
 - EOL: `EolKind` + `trailing_nl` round-trip on save (`MIXED` saves as LF, then resets to LF).
 - Cursor: `want_cx` goal column; roam below EOF is bounded by `editor_max_cy()` (`num_lines + view_rows - 2`), typing there is ignored via `NULL` guards, `col_off` is preserved on virtual rows.
 - Enter: new line inherits the split head line's leading spaces (capped at `cx`); cursor lands after the indent.
@@ -39,7 +39,7 @@ C11 ncurses text editor. Single binary, no test framework, no CI.
 - Focus (`src/focus.c`, static, no malloc): xterm tracking via raw `ESC[?1004h`/`l` (no terminfo cap exists) + `define_key("\033[I"/"\033[O", 1001/1002)` so ncurses decodes — never parse `ESC [ O` manually or `[O` leaks in as text. Focus-out saves only when dirty+named (`Auto-saved`, failures status-only, dirty kept); unnamed buffers skipped. `editor_end_screen()` (shutdown-then-`endwin`) replaces both bare `endwin()` calls (`main.c`, `die()`) or `[O` sprays into the shell after quit.
 - Keys: ncurses has **no** `KEY_SUP`/`KEY_SDOWN` — Shift+Up/Down arrive via `kri`/`kind` as `KEY_SR`/`KEY_SF`; Shift+arrows/Home/End are `KEY_SLEFT`/`SRIGHT`/`SHOME`/`SSEND`, Shift+PgUp/PgDn are `KEY_SPREVIOUS`/`KEY_SNEXT` (`Ctrl-A`/`Ctrl-E` also Home/End). Shift+Tab is `KEY_BTAB` → unindent (block over selection, else current line); there is deliberately **no** Ctrl+Tab binding (plain xterm sends bare `0x09`).
 - Page: `KEY_PPAGE`/`KEY_NPAGE` move exactly `LINES-2` rows, clamped to `editor_max_cy()`; `row_off` follows via per-frame `editor_scroll()` in `editor_run` (not inside `editor_move_page`).
-- Undo: `Ctrl-Z`/`Ctrl-Y`; full-buffer snapshots (content + cursor + selection + `dirty`) capped at 64, any new edit clears redo; consecutive char inserts/backspaces coalesce via `undo_begin`/`undo_end`; unindent pushes only when it actually strips.
+- Undo: `Ctrl-Z`/`Ctrl-Y`; full-buffer snapshots (content + cursor + selection + `dirty`) capped at 64, any new edit clears redo; consecutive char inserts/backspaces coalesce via `undo_begin`/`undo_end`; unindent pushes only when it actually strips. Capture frees the target slot first (undo-then-edit overwrites must not leak); eviction NULLs the memmove-duplicated top slot before capture — it aliases the shifted entry, freeing it is use-after-free.
 
 ## Verification (headless pty, no fixtures)
 

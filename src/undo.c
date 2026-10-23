@@ -83,6 +83,7 @@ static void undo_state_capture(UndoState *state)
 		return;
 	}
 
+	undo_state_free(state);
 	state->num_lines = g_editor.num_lines;
 	state->cx = g_editor.cx;
 	state->cy = g_editor.cy;
@@ -184,6 +185,8 @@ static void undo_stack_push(UndoState *stack, size_t *count)
 		undo_state_free(&stack[0]);
 		memmove(&stack[0], &stack[1], sizeof(UndoState) * (UNDO_LIMIT - 1));
 		(*count)--;
+		stack[*count].lines = NULL;
+		stack[*count].num_lines = 0;
 	}
 
 	undo_state_capture(&stack[*count]);

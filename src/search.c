@@ -164,7 +164,16 @@ void search_prompt_and_find(void)
 	curs_set(1);
 	mvprintw(rows, 0, "Find: ");
 	clrtoeol();
-	getnstr(query, (int)sizeof(query) - 1);
+	query[0] = '\0';
+
+	if(getnstr(query, (int)sizeof(query) - 1) != OK)
+	{
+		noecho();
+		search_deactivate();
+		editor_set_status("Search cancelled");
+		return;
+	}
+
 	noecho();
 
 	if(query[0] == '\0')

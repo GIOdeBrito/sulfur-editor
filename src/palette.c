@@ -254,21 +254,29 @@ static int palette_run_selected(void)
 
 	if(action == PAL_INDENT)
 	{
-		if(editor_indent_selection() == 0)
+		if(g_editor.sel_active == 0)
 		{
 			editor_set_status("No selection");
+			return 0;
 		}
 
+		undo_begin(UNDO_OTHER);
+		editor_indent_selection();
+		undo_end(UNDO_OTHER);
 		return 0;
 	}
 
 	if(action == PAL_DELETE_SELECTION)
 	{
-		if(editor_delete_selection() == 0)
+		if(g_editor.sel_active == 0)
 		{
 			editor_set_status("No selection");
+			return 0;
 		}
 
+		undo_begin(UNDO_OTHER);
+		editor_delete_selection();
+		undo_end(UNDO_OTHER);
 		return 0;
 	}
 
@@ -340,7 +348,7 @@ int palette_handle_key(int key)
 		return 0;
 	}
 
-	if(key >= 32 && key <= 126)
+	if((key >= 32 && key <= 126) || (key >= 128 && key <= 255))
 	{
 		len = strlen(s_palette.query);
 
@@ -465,7 +473,7 @@ int palette_query_cursor_x(void)
 	int len;
 
 	palette_box(&x, &y, &w, &h, 0);
-	len = (int)strlen(s_palette.query);
+	len = utf8_width_n(s_palette.query, strlen(s_palette.query));
 
 	if(len > w - 4)
 	{
@@ -527,13 +535,7 @@ void palette_draw(void)
 
 	mvaddch(y + 1, x + content + 1, ACS_VLINE);
 	mvaddnstr(y + 1, x + 1, "> ", content);
-	qlen = (int)strlen(s_palette.query);
-
-	if(qlen > content - 2)
-	{
-		qlen = content - 2;
-	}
-
+	qlen = (int)utf8_fit_cells(s_palette.query, strlen(s_palette.query), content - 2);
 	mvaddnstr(y + 1, x + 3, s_palette.query, qlen);
 
 	for(i = 0; i < visible; i++)

@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "buffer.h"
 #include "common.h"
@@ -232,21 +234,12 @@ void editor_open(const char *filename)
 	editor_set_status("File loaded");
 }
 
-int editor_save(void)
+static int editor_write_all(FILE *fp)
 {
-	FILE *fp;
 	size_t i;
-
-	if(g_editor.filename[0] == '\0')
-	{
-		return -1;
-	}
-
-	fp = fopen(g_editor.filename, "w");
 
 	if(fp == NULL)
 	{
-		editor_set_status("Cannot save: fopen failed");
 		return -1;
 	}
 
@@ -260,8 +253,6 @@ int editor_save(void)
 
 		if(line->len > 0 && fwrite(line->data, 1, line->len, fp) != line->len)
 		{
-			fclose(fp);
-			editor_set_status("Cannot save: write failed");
 			return -1;
 		}
 
@@ -281,8 +272,6 @@ int editor_save(void)
 
 		if(fwrite(newline, 1, newline_len, fp) != newline_len)
 		{
-			fclose(fp);
-			editor_set_status("Cannot save: write failed");
 			return -1;
 		}
 	}
@@ -303,13 +292,89 @@ int editor_save(void)
 
 		if(fwrite(final_nl, 1, final_len, fp) != final_len)
 		{
-			fclose(fp);
-			editor_set_status("Cannot save: write failed");
 			return -1;
 		}
 	}
 
-	fclose(fp);
+	return 0;
+}
+
+int editor_save(void)
+{
+	FILE *fp;
+	char tmp[FILENAME_LIMIT + 16];
+	struct stat st;
+	int have_mode;
+	int fd;
+
+	if(g_editor.filename[0] == '\0')
+	{
+		return -1;
+	}
+
+	if(snprintf(tmp, sizeof(tmp), "%s.sulf.tmp", g_editor.filename) >= (int)sizeof(tmp))
+	{
+		editor_set_status("Cannot save: filename too long");
+		return -1;
+	}
+
+	have_mode = 0;
+
+	if(stat(g_editor.filename, &st) == 0)
+	{
+		have_mode = 1;
+	}
+
+	fp = fopen(tmp, "w");
+
+	if(fp == NULL)
+	{
+		editor_set_status("Cannot save: fopen failed");
+		return -1;
+	}
+
+	if(have_mode != 0)
+	{
+		fd = fileno(fp);
+
+		if(fd >= 0)
+		{
+			fchmod(fd, st.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO));
+		}
+	}
+
+	if(editor_write_all(fp) != 0)
+	{
+		fclose(fp);
+		remove(tmp);
+		editor_set_status("Cannot save: write failed");
+		return -1;
+	}
+
+	fd = fileno(fp);
+
+	if(fd < 0 || fsync(fd) != 0)
+	{
+		fclose(fp);
+		remove(tmp);
+		editor_set_status("Cannot save: write failed");
+		return -1;
+	}
+
+	if(fclose(fp) != 0)
+	{
+		remove(tmp);
+		editor_set_status("Cannot save: write failed");
+		return -1;
+	}
+
+	if(rename(tmp, g_editor.filename) != 0)
+	{
+		remove(tmp);
+		editor_set_status("Cannot save: rename failed");
+		return -1;
+	}
+
 	g_editor.dirty = 0;
 
 	if(g_editor.eol == EOL_MIXED)

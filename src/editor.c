@@ -105,6 +105,8 @@ void editor_clamp_cursor(void)
 		g_editor.cx = line->len;
 	}
 
+	g_editor.cx = line_char_start(line, g_editor.cx);
+
 	if(g_editor.sel_active != 0)
 	{
 		if(g_editor.sel_ay > max_cy)
@@ -115,6 +117,11 @@ void editor_clamp_cursor(void)
 		if(g_editor.sel_ay < g_editor.num_lines && g_editor.sel_ax > g_editor.lines[g_editor.sel_ay].len)
 		{
 			g_editor.sel_ax = g_editor.lines[g_editor.sel_ay].len;
+		}
+
+		if(g_editor.sel_ay < g_editor.num_lines)
+		{
+			g_editor.sel_ax = line_char_start(&g_editor.lines[g_editor.sel_ay], g_editor.sel_ax);
 		}
 	}
 }

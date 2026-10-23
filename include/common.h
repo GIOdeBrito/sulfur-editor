@@ -4,6 +4,7 @@
 #include <stddef.h>
 
 #define CTRL_KEY(k) ((k) & 0x1f)
+#define SULF_VERSION "1.0.0"
 #define TAB_WIDTH 4
 #define FILENAME_LIMIT 512
 #define STATUS_LIMIT 256

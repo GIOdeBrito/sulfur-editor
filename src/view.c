@@ -176,18 +176,40 @@ static void editor_draw_colored_line(int y, int text_x, Line *line, size_t file_
 	i = start;
 	col = text_x;
 
+	if(i < line->len)
+	{
+		i = line_char_start(line, i);
+	}
+
 	while(i < end)
 	{
 		unsigned char c;
 		size_t j;
+		size_t run_cells;
 		int attr;
 
 		c = cls[i];
-		j = i + 1;
+		j = line_char_next(line, i);
+		run_cells = (size_t)utf8_char_width(&line->data[i], line->len - i);
 
 		while(j < end && cls[j] == c)
 		{
-			j++;
+			int w;
+
+			w = utf8_char_width(&line->data[j], line->len - j);
+
+			if(col + (int)run_cells + w > text_x + view_cols)
+			{
+				break;
+			}
+
+			run_cells += (size_t)w;
+			j = line_char_next(line, j);
+		}
+
+		if(col + (int)run_cells > text_x + view_cols)
+		{
+			break;
 		}
 
 		attr = highlight_attr((HlClass)c);
@@ -196,15 +218,18 @@ static void editor_draw_colored_line(int y, int text_x, Line *line, size_t file_
 		while(k < j)
 		{
 			size_t m;
+			size_t m_cells;
 			int kind;
 			int cell_attr;
 
 			kind = editor_cell_kind(file_row, k);
-			m = k + 1;
+			m = k;
+			m_cells = 0;
 
 			while(m < j && editor_cell_kind(file_row, m) == kind)
 			{
-				m++;
+				m_cells += (size_t)utf8_char_width(&line->data[m], line->len - m);
+				m = line_char_next(line, m);
 			}
 
 			if(kind == 0 || kind == 3)
@@ -221,12 +246,13 @@ static void editor_draw_colored_line(int y, int text_x, Line *line, size_t file_
 			}
 
 			attron(cell_attr);
-			mvaddnstr(y, col + (int)(k - i), &line->data[k], (int)(m - k));
+			mvaddnstr(y, col, &line->data[k], (int)(m - k));
 			attroff(cell_attr);
 
+			col += (int)m_cells;
 			k = m;
 		}
-		col += (int)(j - i);
+
 		i = j;
 	}
 }
@@ -252,6 +278,7 @@ size_t editor_max_cy(void)
 
 void editor_scroll(void)
 {
+	Line *line;
 	int view_rows;
 	int view_cols;
 
@@ -278,19 +305,24 @@ void editor_scroll(void)
 		g_editor.row_off = g_editor.num_lines - 1;
 	}
 
-	if(g_editor.cy >= g_editor.num_lines)
+	line = editor_current_line();
+
+	if(line == NULL)
 	{
 		return;
 	}
 
+	g_editor.col_off = line_char_start(line, g_editor.col_off);
+
 	if(g_editor.cx < g_editor.col_off)
 	{
 		g_editor.col_off = g_editor.cx;
+		return;
 	}
 
-	if(g_editor.cx >= g_editor.col_off + (size_t)view_cols)
+	while(line_cells_upto(line, g_editor.cx) >= line_cells_upto(line, g_editor.col_off) + (size_t)view_cols)
 	{
-		g_editor.col_off = g_editor.cx - (size_t)view_cols + 1;
+		g_editor.col_off = line_char_next(line, g_editor.col_off);
 	}
 }
 
@@ -346,13 +378,13 @@ static HlClass editor_map_class(Line *line, size_t row)
 
 static void editor_map_coverage(Line *line, int view_cols, int covered[MAP_CONTENT_WIDTH])
 {
-	size_t limit;
-	size_t j;
-	int i;
+	size_t i;
+	int cell;
+	int k;
 
-	for(i = 0; i < MAP_CONTENT_WIDTH; i++)
+	for(k = 0; k < MAP_CONTENT_WIDTH; k++)
 	{
-		covered[i] = 0;
+		covered[k] = 0;
 	}
 
 	if(line == NULL || line->data == NULL || line->len == 0)
@@ -365,52 +397,40 @@ static void editor_map_coverage(Line *line, int view_cols, int covered[MAP_CONTE
 		return;
 	}
 
-	limit = line->len;
+	i = 0;
+	cell = 0;
 
-	if(limit > (size_t)view_cols)
+	while(i < line->len)
 	{
-		limit = (size_t)view_cols;
-	}
-
-	for(j = 0; j < limit; j++)
-	{
-		char c;
+		int w;
 		int owner;
 
-		c = line->data[j];
-
-		if(c == ' ' || c == '\t')
+		if(line->data[i] != ' ' && line->data[i] != '\t')
 		{
-			continue;
+			if(cell >= view_cols)
+			{
+				covered[MAP_CONTENT_WIDTH - 1] = 1;
+				return;
+			}
+
+			owner = (cell * MAP_CONTENT_WIDTH) / view_cols;
+
+			if(owner < 0)
+			{
+				owner = 0;
+			}
+
+			if(owner >= MAP_CONTENT_WIDTH)
+			{
+				owner = MAP_CONTENT_WIDTH - 1;
+			}
+
+			covered[owner] = 1;
 		}
 
-		owner = (int)((j * (size_t)MAP_CONTENT_WIDTH) / (size_t)view_cols);
-
-		if(owner < 0)
-		{
-			owner = 0;
-		}
-
-		if(owner >= MAP_CONTENT_WIDTH)
-		{
-			owner = MAP_CONTENT_WIDTH - 1;
-		}
-
-		covered[owner] = 1;
-	}
-
-	if(line->len <= (size_t)view_cols)
-	{
-		return;
-	}
-
-	for(j = (size_t)view_cols; j < line->len; j++)
-	{
-		if(line->data[j] != ' ' && line->data[j] != '\t')
-		{
-			covered[MAP_CONTENT_WIDTH - 1] = 1;
-			return;
-		}
+		w = utf8_char_width(&line->data[i], line->len - i);
+		cell += w;
+		i = line_char_next(line, i);
 	}
 }
 
@@ -478,9 +498,13 @@ static void editor_draw_map(void)
 
 		for(row = first; row < end; row++)
 		{
-			if(g_editor.lines[row].len > max_len)
+			size_t width;
+
+			width = line_cells_upto(&g_editor.lines[row], g_editor.lines[row].len);
+
+			if(width > max_len)
 			{
-				max_len = g_editor.lines[row].len;
+				max_len = width;
 				max_row = row;
 			}
 		}
@@ -584,13 +608,13 @@ void editor_draw_lines(void)
 
 	for(y = 0; y < view_rows; y++)
 	{
-		size_t file_row;
-		Line *line;
-		size_t visible_len;
-		char numbuf[32];
-		int is_cursor;
-		size_t i;
-		int col;
+	size_t file_row;
+	Line *line;
+	char numbuf[32];
+	int is_cursor;
+	size_t i;
+	int col;
+	int used;
 
 		file_row = g_editor.row_off + (size_t)y;
 		move(y, 0);
@@ -642,27 +666,38 @@ void editor_draw_lines(void)
 			continue;
 		}
 
-		visible_len = line->len - g_editor.col_off;
-
-		if(visible_len > (size_t)view_cols)
-		{
-			visible_len = (size_t)view_cols;
-		}
-
-		i = g_editor.col_off;
+		i = line_char_start(line, g_editor.col_off);
 		col = text_x;
+		used = 0;
 
-		while(i < g_editor.col_off + visible_len)
+		while(i < line->len && used < view_cols)
 		{
 			size_t m;
+			size_t run_cells;
 			int kind;
 
 			kind = editor_cell_kind(file_row, i);
-			m = i + 1;
+			m = i;
+			run_cells = 0;
 
-			while(m < g_editor.col_off + visible_len && editor_cell_kind(file_row, m) == kind)
+			while(m < line->len && editor_cell_kind(file_row, m) == kind)
 			{
-				m++;
+				int w;
+
+				w = utf8_char_width(&line->data[m], line->len - m);
+
+				if(used + (int)run_cells + w > view_cols)
+				{
+					break;
+				}
+
+				run_cells += (size_t)w;
+				m = line_char_next(line, m);
+			}
+
+			if(m == i)
+			{
+				break;
 			}
 
 			if(kind == 0 || kind == 3)
@@ -685,7 +720,8 @@ void editor_draw_lines(void)
 				attroff(A_BOLD);
 			}
 
-			col += (int)(m - i);
+			col += (int)run_cells;
+			used += (int)run_cells;
 			i = m;
 		}
 	}
@@ -708,7 +744,8 @@ void editor_draw_status(void)
 
 	if(g_editor.status[0] != '\0')
 	{
-		mvaddnstr(msg_row, 0, g_editor.status, COLS);
+		mvaddnstr(msg_row, 0, g_editor.status,
+			(int)utf8_fit_cells(g_editor.status, strlen(g_editor.status), COLS));
 	}
 
 	if(g_editor.filename[0] == '\0')
@@ -724,11 +761,11 @@ void editor_draw_status(void)
 	attron(A_REVERSE);
 	move(status_row, 0);
 	clrtoeol();
-	mvaddnstr(status_row, 0, left, COLS);
+	mvaddnstr(status_row, 0, left, (int)utf8_fit_cells(left, strlen(left), COLS));
 
-	if(COLS > (int)strlen(right))
+	if(COLS > utf8_width_n(right, strlen(right)))
 	{
-		mvaddnstr(status_row, COLS - (int)strlen(right), right, (int)strlen(right));
+		mvaddnstr(status_row, COLS - utf8_width_n(right, strlen(right)), right, (int)strlen(right));
 	}
 
 	attroff(A_REVERSE);
