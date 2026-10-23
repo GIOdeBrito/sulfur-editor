@@ -16,7 +16,7 @@
 
 #define EXPLORER_MAX_QUERY 64
 #define EXPLORER_MAX_ENTRIES 256
-#define EXPLORER_MAX_VISIBLE 8
+#define EXPLORER_MAX_VISIBLE 14
 #define EXPLORER_MODAL_CONTENT 40
 #define EXPLORER_NAME_LIMIT 256
 #define EXPLORER_PREVIEW_LINES 64
@@ -967,13 +967,7 @@ static int explorer_visible_rows(void)
 	int visible;
 	int y;
 
-	visible = s_explorer.count;
-
-	if(visible > EXPLORER_MAX_VISIBLE)
-	{
-		visible = EXPLORER_MAX_VISIBLE;
-	}
-
+	visible = EXPLORER_MAX_VISIBLE;
 	y = 1;
 
 	while(visible > 0 && y + visible + 3 > LINES - 2)
