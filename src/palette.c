@@ -75,6 +75,7 @@ typedef struct
 	int filtered[PALETTE_MAX_ITEMS];
 	int count;
 	int selected;
+	int scroll;
 } Palette;
 
 static Palette s_palette;
@@ -121,6 +122,7 @@ static void palette_refilter(void)
 
 	s_palette.count = 0;
 	s_palette.selected = 0;
+	s_palette.scroll = 0;
 
 	for(i = 0; i < PALETTE_TABLE_COUNT; i++)
 	{
@@ -155,6 +157,7 @@ void palette_reset(void)
 	s_palette.active = 0;
 	s_palette.count = 0;
 	s_palette.selected = 0;
+	s_palette.scroll = 0;
 	s_palette.query[0] = '\0';
 }
 
@@ -165,6 +168,8 @@ int palette_is_active(void)
 
 static void palette_move(int delta)
 {
+	int visible;
+
 	if(s_palette.count == 0)
 	{
 		return;
@@ -175,6 +180,23 @@ static void palette_move(int delta)
 	if(s_palette.selected < 0)
 	{
 		s_palette.selected += s_palette.count;
+	}
+
+	visible = s_palette.count;
+
+	if(visible > PALETTE_MAX_VISIBLE)
+	{
+		visible = PALETTE_MAX_VISIBLE;
+	}
+
+	if(s_palette.selected < s_palette.scroll)
+	{
+		s_palette.scroll = s_palette.selected;
+	}
+
+	if(s_palette.selected >= s_palette.scroll + visible)
+	{
+		s_palette.scroll = s_palette.selected - visible + 1;
 	}
 }
 
@@ -596,14 +618,20 @@ void palette_draw(void)
 		}
 
 		mvaddch(row, x + content + 1, ACS_VLINE);
-		selected = (i == s_palette.selected);
+
+		if(s_palette.scroll + i >= s_palette.count)
+		{
+			continue;
+		}
+
+		selected = (s_palette.scroll + i == s_palette.selected);
 
 		if(selected)
 		{
 			attron(A_REVERSE);
 		}
 
-		mvaddnstr(row, x + 1, s_table[s_palette.filtered[i]].name, content);
+		mvaddnstr(row, x + 1, s_table[s_palette.filtered[s_palette.scroll + i]].name, content);
 
 		if(selected)
 		{
