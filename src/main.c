@@ -28,7 +28,7 @@ int main(int argc, char *argv[])
 	editor_open(filename);
 	editor_start_screen();
 	editor_run();
-	endwin();
+	editor_end_screen();
 	editor_free();
 	return EXIT_SUCCESS;
 }

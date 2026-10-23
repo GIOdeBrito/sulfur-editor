@@ -11,14 +11,13 @@ Ideas for future work, roughly ordered by value/effort.
 - Comment toggle (`Ctrl-/`): prefix touched lines with `//`, keep selection
 
 ## Navigation & search
-- Find (`Ctrl-F`) with `Enter`/`Shift-Enter` next/previous match + highlight
 - Find & replace with `y/n/a` confirm per match
 - Go to line (`Ctrl-G`): prompt for a number, clamp like page moves
 - Matching-bracket jump (`%` or `Ctrl-]`) using the C highlighter state
 
 ## Quality of life
 - Word wrap toggle (soft wrap, no buffer change)
-- Auto-save on focus loss / periodic backup file (`.#name` + restore prompt)
+- Periodic backup file (`.#name` + restore prompt)
 
 ## Platform
 - 256-color / truecolor palette detection, theme option
@@ -26,3 +25,7 @@ Ideas for future work, roughly ordered by value/effort.
 - Wider highlight coverage: `.md`, `.py`, `.js`, `.sh` keyword sets
 - Man page + `--help` flag
 - Basic unit tests for buffer/edit ops (currently verified via headless pty only)
+
+
+
+

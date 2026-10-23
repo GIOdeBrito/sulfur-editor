@@ -6,6 +6,7 @@
 #include "complete.h"
 #include "edit.h"
 #include "editor.h"
+#include "focus.h"
 #include "input.h"
 #include "mouse.h"
 #include "search.h"
@@ -89,6 +90,11 @@ int editor_request_quit(void)
 
 int editor_handle_key(int key)
 {
+	if(focus_handle_key(key))
+	{
+		return 0;
+	}
+
 	if(search_is_active())
 	{
 		if(search_handle_key(key))

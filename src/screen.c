@@ -2,6 +2,7 @@
 #include <termios.h>
 #include <unistd.h>
 
+#include "focus.h"
 #include "highlight.h"
 #include "mouse.h"
 #include "screen.h"
@@ -33,4 +34,11 @@ void editor_start_screen(void)
 	editor_disable_flow_control();
 	highlight_init_color();
 	mouse_init();
+	focus_init();
+}
+
+void editor_end_screen(void)
+{
+	focus_shutdown();
+	endwin();
 }
