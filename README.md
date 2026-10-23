@@ -32,8 +32,10 @@ Run as `build/sulf [filename]`.
 
 ## Notes
 
-- Tabs are stored as spaces (4). Line endings round-trip: LF, CRLF, and
-  mixed files keep their style on save (mixed normalizes to LF after saving).
+- Tabs are stored as tab bytes and spaces as spaces — neither is ever
+  converted (tab stops render at every 4th column, display only).
+  Line endings round-trip: LF, CRLF, and mixed files keep their style on
+  save (mixed normalizes to LF after saving).
 - Full UTF-8: cursor, editing, search, and display are character-aware;
   invalid bytes degrade to single cells instead of corrupting text.
   Completion matches ASCII words only. Needs a UTF-8 locale (falls back to

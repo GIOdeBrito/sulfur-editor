@@ -133,26 +133,21 @@ int editor_indent_selection(void)
 	for(row = sy; row <= last; row++)
 	{
 		Line *line;
-		int k;
 
 		line = &g_editor.lines[row];
-		line_ensure_cap(line, line->len + (size_t)TAB_WIDTH + 1);
-		memmove(&line->data[TAB_WIDTH], line->data, line->len + 1);
-		line->len += (size_t)TAB_WIDTH;
-
-		for(k = 0; k < TAB_WIDTH; k++)
-		{
-			line->data[k] = ' ';
-		}
+		line_ensure_cap(line, line->len + 2);
+		memmove(&line->data[1], line->data, line->len + 1);
+		line->data[0] = '\t';
+		line->len += 1;
 
 		if(g_editor.sel_ay == row)
 		{
-			g_editor.sel_ax += (size_t)TAB_WIDTH;
+			g_editor.sel_ax += 1;
 		}
 
 		if(g_editor.cy == row)
 		{
-			g_editor.cx += (size_t)TAB_WIDTH;
+			g_editor.cx += 1;
 			g_editor.want_cx = g_editor.cx;
 		}
 	}
@@ -169,6 +164,13 @@ static size_t editor_strip_leading(Line *line, size_t want)
 	if(line == NULL || line->data == NULL)
 	{
 		return 0;
+	}
+
+	if(line->len > 0 && line->data[0] == '\t')
+	{
+		memmove(line->data, &line->data[1], line->len);
+		line->len -= 1;
+		return 1;
 	}
 
 	n = 0;
@@ -225,7 +227,8 @@ void editor_unindent(void)
 
 				target = &g_editor.lines[row];
 
-				if(target->data == NULL || target->len == 0 || target->data[0] != ' ')
+				if(target->data == NULL || target->len == 0 ||
+					(target->data[0] != ' ' && target->data[0] != '\t'))
 				{
 					continue;
 				}
@@ -296,7 +299,8 @@ void editor_unindent(void)
 			return;
 		}
 
-		if(line->data == NULL || line->len == 0 || line->data[0] != ' ')
+		if(line->data == NULL || line->len == 0 ||
+			(line->data[0] != ' ' && line->data[0] != '\t'))
 		{
 			return;
 		}
@@ -323,7 +327,6 @@ void editor_unindent(void)
 void editor_insert_char(char c)
 {
 	Line *line;
-	int i;
 	int kind;
 
 	if(g_editor.sel_active != 0)
@@ -353,21 +356,6 @@ void editor_insert_char(char c)
 
 	if(line == NULL)
 	{
-		undo_end(kind);
-		return;
-	}
-
-	if(c == '\t')
-	{
-		for(i = 0; i < TAB_WIDTH; i++)
-		{
-			line_insert_char(line, g_editor.cx, ' ');
-			g_editor.cx++;
-		}
-
-		g_editor.dirty = 1;
-		g_editor.want_cx = g_editor.cx;
-		highlight_mark_dirty();
 		undo_end(kind);
 		return;
 	}
@@ -413,7 +401,8 @@ void editor_insert_newline(void)
 
 	if(line->data != NULL)
 	{
-		while(indent < line->len && indent < g_editor.cx && line->data[indent] == ' ')
+		while(indent < line->len && indent < g_editor.cx &&
+			(line->data[indent] == ' ' || line->data[indent] == '\t'))
 		{
 			indent++;
 		}
@@ -448,7 +437,7 @@ void editor_insert_newline(void)
 	{
 		line_ensure_cap(fresh, fresh->len + indent + 1);
 		memmove(&fresh->data[indent], fresh->data, fresh->len + 1);
-		memset(fresh->data, ' ', indent);
+		memcpy(fresh->data, line->data, indent);
 		fresh->len += indent;
 	}
 

@@ -12,6 +12,41 @@
 #define MAP_CONTENT_WIDTH 3
 #define MAP_WIDTH 4
 
+/* Tab stops are display-only: buffers keep raw '\t' bytes, which expand
+to the next TAB_WIDTH column here. rel is the display column measured
+from the start of the line (not the viewport). */
+static int editor_tab_cells(int rel)
+{
+	if(rel < 0)
+	{
+		rel = 0;
+	}
+
+	return TAB_WIDTH - (rel % TAB_WIDTH);
+}
+
+static int editor_draw_width(const Line *line, size_t idx, int rel)
+{
+	if(line->data[idx] == '\t')
+	{
+		return editor_tab_cells(rel);
+	}
+
+	return utf8_char_width(&line->data[idx], line->len - idx);
+}
+
+static void editor_draw_tab(int y, int col, int w)
+{
+	static const char spaces[] = "                ";
+
+	if(w > (int)sizeof(spaces) - 1)
+	{
+		w = (int)sizeof(spaces) - 1;
+	}
+
+	mvaddnstr(y, col, spaces, w);
+}
+
 int editor_gutter_width(void)
 {
 	size_t n;
@@ -152,6 +187,7 @@ static void editor_draw_colored_line(int y, int text_x, Line *line, size_t file_
 	size_t i;
 	size_t k;
 	int col;
+	int hidden;
 
 	if(line == NULL || line->data == NULL || line->len == 0)
 	{
@@ -181,6 +217,8 @@ static void editor_draw_colored_line(int y, int text_x, Line *line, size_t file_
 		i = line_char_start(line, i);
 	}
 
+	hidden = (int)line_cells_upto(line, i);
+
 	while(i < end)
 	{
 		unsigned char c;
@@ -190,13 +228,13 @@ static void editor_draw_colored_line(int y, int text_x, Line *line, size_t file_
 
 		c = cls[i];
 		j = line_char_next(line, i);
-		run_cells = (size_t)utf8_char_width(&line->data[i], line->len - i);
+		run_cells = (size_t)editor_draw_width(line, i, hidden + (col - text_x));
 
 		while(j < end && cls[j] == c)
 		{
 			int w;
 
-			w = utf8_char_width(&line->data[j], line->len - j);
+			w = editor_draw_width(line, j, hidden + (col - text_x) + (int)run_cells);
 
 			if(col + (int)run_cells + w > text_x + view_cols)
 			{
@@ -218,17 +256,14 @@ static void editor_draw_colored_line(int y, int text_x, Line *line, size_t file_
 		while(k < j)
 		{
 			size_t m;
-			size_t m_cells;
 			int kind;
 			int cell_attr;
 
 			kind = editor_cell_kind(file_row, k);
 			m = k;
-			m_cells = 0;
 
 			while(m < j && editor_cell_kind(file_row, m) == kind)
 			{
-				m_cells += (size_t)utf8_char_width(&line->data[m], line->len - m);
 				m = line_char_next(line, m);
 			}
 
@@ -246,11 +281,32 @@ static void editor_draw_colored_line(int y, int text_x, Line *line, size_t file_
 			}
 
 			attron(cell_attr);
-			mvaddnstr(y, col, &line->data[k], (int)(m - k));
-			attroff(cell_attr);
 
-			col += (int)m_cells;
-			k = m;
+			while(k < m)
+			{
+				if(line->data[k] == '\t')
+				{
+					int w;
+
+					w = editor_tab_cells(hidden + (col - text_x));
+					editor_draw_tab(y, col, w);
+					col += w;
+					k = line_char_next(line, k);
+				}
+				else
+				{
+					size_t n;
+					int w;
+
+					n = line_char_next(line, k);
+					w = utf8_char_width(&line->data[k], line->len - k);
+					mvaddnstr(y, col, &line->data[k], (int)(n - k));
+					col += w;
+					k = n;
+				}
+			}
+
+			attroff(cell_attr);
 		}
 
 		i = j;
@@ -428,7 +484,15 @@ static void editor_map_coverage(Line *line, int view_cols, int covered[MAP_CONTE
 			covered[owner] = 1;
 		}
 
-		w = utf8_char_width(&line->data[i], line->len - i);
+		if(line->data[i] == '\t')
+		{
+			w = editor_tab_cells(cell);
+		}
+		else
+		{
+			w = utf8_char_width(&line->data[i], line->len - i);
+		}
+
 		cell += w;
 		i = line_char_next(line, i);
 	}
@@ -615,6 +679,7 @@ void editor_draw_lines(void)
 	size_t i;
 	int col;
 	int used;
+	int hidden;
 
 		file_row = g_editor.row_off + (size_t)y;
 		move(y, 0);
@@ -669,11 +734,13 @@ void editor_draw_lines(void)
 		i = line_char_start(line, g_editor.col_off);
 		col = text_x;
 		used = 0;
+		hidden = (int)line_cells_upto(line, i);
 
 		while(i < line->len && used < view_cols)
 		{
 			size_t m;
 			size_t run_cells;
+			size_t k;
 			int kind;
 
 			kind = editor_cell_kind(file_row, i);
@@ -684,7 +751,7 @@ void editor_draw_lines(void)
 			{
 				int w;
 
-				w = utf8_char_width(&line->data[m], line->len - m);
+				w = editor_draw_width(line, m, hidden + used + (int)run_cells);
 
 				if(used + (int)run_cells + w > view_cols)
 				{
@@ -709,7 +776,33 @@ void editor_draw_lines(void)
 				attron(A_BOLD);
 			}
 
-			mvaddnstr(y, col, &line->data[i], (int)(m - i));
+			k = i;
+
+			while(k < m)
+			{
+				if(line->data[k] == '\t')
+				{
+					int w;
+
+					w = editor_tab_cells(hidden + used);
+					editor_draw_tab(y, col, w);
+					col += w;
+					used += w;
+					k = line_char_next(line, k);
+				}
+				else
+				{
+					size_t n;
+					int w;
+
+					n = line_char_next(line, k);
+					w = utf8_char_width(&line->data[k], line->len - k);
+					mvaddnstr(y, col, &line->data[k], (int)(n - k));
+					col += w;
+					used += w;
+					k = n;
+				}
+			}
 
 			if(kind == 0 || kind == 3)
 			{
@@ -720,8 +813,6 @@ void editor_draw_lines(void)
 				attroff(A_BOLD);
 			}
 
-			col += (int)run_cells;
-			used += (int)run_cells;
 			i = m;
 		}
 	}

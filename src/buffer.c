@@ -38,54 +38,23 @@ void editor_ensure_line_cap(size_t needed)
 void editor_append_line(const char *text, size_t len)
 {
 	Line *line;
-	size_t expanded;
 	size_t i;
-	size_t j;
 
 	editor_ensure_line_cap(g_editor.num_lines + 1);
 	line = &g_editor.lines[g_editor.num_lines];
 	line_init(line);
-	expanded = 0;
+	line_ensure_cap(line, len + 1);
 
 	for(i = 0; i < len; i++)
 	{
-		if(text != NULL && text[i] == '\t')
-		{
-			expanded += (size_t)TAB_WIDTH;
-		}
-		else
-		{
-			expanded++;
-		}
-	}
-
-	line_ensure_cap(line, expanded + 1);
-	j = 0;
-
-	for(i = 0; i < len; i++)
-	{
-		int k;
-
-		if(text != NULL && text[i] == '\t')
-		{
-			for(k = 0; k < TAB_WIDTH; k++)
-			{
-				line->data[j] = ' ';
-				j++;
-			}
-
-			continue;
-		}
-
 		if(text != NULL)
 		{
-			line->data[j] = text[i];
-			j++;
+			line->data[i] = text[i];
 		}
 	}
 
-	line->len = expanded;
-	line->data[expanded] = '\0';
+	line->len = len;
+	line->data[len] = '\0';
 	g_editor.num_lines++;
 }
 

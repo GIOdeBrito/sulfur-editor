@@ -414,6 +414,20 @@ size_t line_char_next(const Line *line, size_t idx)
 	return idx + len;
 }
 
+static int line_tab_advance(int col)
+{
+	int next;
+
+	if(col < 0)
+	{
+		col = 0;
+	}
+
+	next = ((col / TAB_WIDTH) + 1) * TAB_WIDTH;
+
+	return next - col;
+}
+
 size_t line_cells_upto(const Line *line, size_t upto)
 {
 	size_t i;
@@ -436,6 +450,13 @@ size_t line_cells_upto(const Line *line, size_t upto)
 	{
 		size_t len;
 
+		if(line->data[i] == '\t')
+		{
+			width += line_tab_advance(width);
+			i++;
+			continue;
+		}
+
 		len = utf8_char_len(&line->data[i], line->len - i);
 
 		if(len == 0 || i + len > line->len)
@@ -453,6 +474,7 @@ size_t line_cells_upto(const Line *line, size_t upto)
 size_t line_byte_at_cell(const Line *line, size_t start, int cells)
 {
 	size_t i;
+	int col;
 
 	if(line == NULL || line->data == NULL)
 	{
@@ -465,12 +487,20 @@ size_t line_byte_at_cell(const Line *line, size_t start, int cells)
 	}
 
 	i = line_char_start(line, start);
+	col = (int)line_cells_upto(line, i);
 
 	while(i < line->len && cells > 0)
 	{
 		int w;
 
-		w = utf8_char_width(&line->data[i], line->len - i);
+		if(line->data[i] == '\t')
+		{
+			w = line_tab_advance(col);
+		}
+		else
+		{
+			w = utf8_char_width(&line->data[i], line->len - i);
+		}
 
 		if(w > cells)
 		{
@@ -478,6 +508,7 @@ size_t line_byte_at_cell(const Line *line, size_t start, int cells)
 		}
 
 		cells -= w;
+		col += w;
 		i = line_char_next(line, i);
 	}
 

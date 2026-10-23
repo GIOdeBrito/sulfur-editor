@@ -19,7 +19,7 @@ C11 ncurses text editor. Single binary, no test framework, no CI.
 
 ## Invariants agents commonly break
 
-- Tabs are stored as spaces (`TAB_WIDTH 4`). Buffer is bytes, not cells: `cx`/`want_cx`/`col_off`/selection anchors are byte indices always snapped to char starts (`editor_clamp_cursor` + char motions/deletes); screen columns come from `line.c` width helpers, never byte counts. `want_cx` stays byte-based. `screen.c` sets locale (`C.UTF-8`/`C.utf8` fallback); completion words stay ASCII-only by construction (high bytes are non-word).
+- Tabs are stored as literal `\t` bytes and never converted to/from spaces on load, save, or edit (`TAB_WIDTH 4` is display-only: tab stops at every 4th column from line start). Buffer is bytes, not cells: `cx`/`want_cx`/`col_off`/selection anchors are byte indices always snapped to char starts (`editor_clamp_cursor` + char motions/deletes); screen columns come from `line.c` tab-aware width helpers, never byte counts. `want_cx` stays byte-based. `screen.c` sets locale (`C.UTF-8`/`C.utf8` fallback); completion words stay ASCII-only by construction (high bytes are non-word). Unindent strips one leading tab or, for legacy space-indented lines, up to 4 spaces.
 - EOL: `EolKind` + `trailing_nl` round-trip on save (`MIXED` saves as LF, then resets to LF).
 - Cursor: `want_cx` goal column; roam below EOF is bounded by `editor_max_cy()` (`num_lines + view_rows - 2`), typing there is ignored via `NULL` guards, `col_off` is preserved on virtual rows.
 - Enter: new line inherits the split head line's leading spaces (capped at `cx`); cursor lands after the indent.
