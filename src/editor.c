@@ -6,6 +6,7 @@
 #include "editor.h"
 #include "highlight.h"
 #include "line.h"
+#include "search.h"
 #include "undo.h"
 #include "util.h"
 #include "view.h"
@@ -39,6 +40,7 @@ void editor_init(void)
 	g_editor.trailing_nl = 0;
 	g_editor.filetype = HL_PLAIN;
 	complete_reset();
+	search_reset();
 	undo_reset();
 }
 

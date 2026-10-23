@@ -4,6 +4,7 @@
 #include "complete.h"
 #include "editor.h"
 #include "mouse.h"
+#include "search.h"
 #include "view.h"
 
 #define MOUSE_WHEEL_STEP 3
@@ -110,6 +111,7 @@ static int mouse_click(MEVENT *ev)
 		g_editor.cy = target;
 		editor_select_clear();
 		complete_reset();
+		search_deactivate();
 		editor_clamp_cursor();
 		g_editor.want_cx = g_editor.cx;
 		return 1;
@@ -139,6 +141,7 @@ static int mouse_click(MEVENT *ev)
 	g_editor.want_cx = g_editor.cx;
 	editor_select_clear();
 	complete_reset();
+	search_deactivate();
 	return 1;
 }
 

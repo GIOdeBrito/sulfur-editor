@@ -6,6 +6,7 @@
 #include "common.h"
 #include "editor.h"
 #include "highlight.h"
+#include "search.h"
 #include "view.h"
 
 #define MAP_CONTENT_WIDTH 3
@@ -126,6 +127,23 @@ static int editor_is_selected(size_t file_row, size_t col)
 	return 1;
 }
 
+static int editor_cell_kind(size_t file_row, size_t col)
+{
+	int current;
+
+	if(editor_is_selected(file_row, col) != 0)
+	{
+		return 0;
+	}
+
+	if(search_cover(file_row, col, &current) != 0)
+	{
+		return (current != 0) ? 3 : 2;
+	}
+
+	return 1;
+}
+
 static void editor_draw_colored_line(int y, int text_x, Line *line, size_t file_row, int view_cols)
 {
 	const unsigned char *cls;
@@ -178,35 +196,33 @@ static void editor_draw_colored_line(int y, int text_x, Line *line, size_t file_
 		while(k < j)
 		{
 			size_t m;
-			int sel;
+			int kind;
+			int cell_attr;
 
-			sel = editor_is_selected(file_row, k);
+			kind = editor_cell_kind(file_row, k);
 			m = k + 1;
 
-			while(m < j && editor_is_selected(file_row, m) == sel)
+			while(m < j && editor_cell_kind(file_row, m) == kind)
 			{
 				m++;
 			}
 
-			if(sel != 0)
+			if(kind == 0 || kind == 3)
 			{
-				attron(attr | A_REVERSE);
+				cell_attr = attr | A_REVERSE;
+			}
+			else if(kind == 2)
+			{
+				cell_attr = attr | A_BOLD;
 			}
 			else
 			{
-				attron(attr);
+				cell_attr = attr;
 			}
 
+			attron(cell_attr);
 			mvaddnstr(y, col + (int)(k - i), &line->data[k], (int)(m - k));
-
-			if(sel != 0)
-			{
-				attroff(attr | A_REVERSE);
-			}
-			else
-			{
-				attroff(attr);
-			}
+			attroff(cell_attr);
 
 			k = m;
 		}
@@ -639,26 +655,34 @@ void editor_draw_lines(void)
 		while(i < g_editor.col_off + visible_len)
 		{
 			size_t m;
-			int sel;
+			int kind;
 
-			sel = editor_is_selected(file_row, i);
+			kind = editor_cell_kind(file_row, i);
 			m = i + 1;
 
-			while(m < g_editor.col_off + visible_len && editor_is_selected(file_row, m) == sel)
+			while(m < g_editor.col_off + visible_len && editor_cell_kind(file_row, m) == kind)
 			{
 				m++;
 			}
 
-			if(sel != 0)
+			if(kind == 0 || kind == 3)
 			{
 				attron(A_REVERSE);
+			}
+			else if(kind == 2)
+			{
+				attron(A_BOLD);
 			}
 
 			mvaddnstr(y, col, &line->data[i], (int)(m - i));
 
-			if(sel != 0)
+			if(kind == 0 || kind == 3)
 			{
 				attroff(A_REVERSE);
+			}
+			else if(kind == 2)
+			{
+				attroff(A_BOLD);
 			}
 
 			col += (int)(m - i);

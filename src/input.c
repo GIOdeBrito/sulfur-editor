@@ -8,6 +8,7 @@
 #include "editor.h"
 #include "input.h"
 #include "mouse.h"
+#include "search.h"
 #include "undo.h"
 #include "view.h"
 
@@ -17,6 +18,7 @@ int editor_prompt_filename(void)
 	int rows;
 
 	complete_reset();
+	search_deactivate();
 	rows = LINES - 1;
 	echo();
 	curs_set(1);
@@ -41,6 +43,7 @@ int editor_request_quit(void)
 	int key;
 
 	complete_reset();
+	search_deactivate();
 
 	if(g_editor.dirty == 0)
 	{
@@ -86,6 +89,14 @@ int editor_request_quit(void)
 
 int editor_handle_key(int key)
 {
+	if(search_is_active())
+	{
+		if(search_handle_key(key))
+		{
+			return 0;
+		}
+	}
+
 	if(complete_is_active())
 	{
 		if(complete_handle_key(key))
@@ -128,6 +139,12 @@ int editor_handle_key(int key)
 	if(key == CTRL_KEY('y'))
 	{
 		undo_redo();
+		return 0;
+	}
+
+	if(key == CTRL_KEY('f'))
+	{
+		search_prompt_and_find();
 		return 0;
 	}
 

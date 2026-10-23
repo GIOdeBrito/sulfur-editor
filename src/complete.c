@@ -7,6 +7,7 @@
 #include "editor.h"
 #include "highlight.h"
 #include "line.h"
+#include "search.h"
 #include "undo.h"
 #include "view.h"
 
@@ -278,6 +279,7 @@ void complete_accept(void)
 	}
 
 	editor_select_clear();
+	search_deactivate();
 	line = editor_current_line();
 
 	if(line == NULL || line->data == NULL)
