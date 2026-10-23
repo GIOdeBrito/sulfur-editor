@@ -29,6 +29,7 @@ static void print_help(const char *prog)
 	printf("  Ctrl-C / Ctrl-X / Ctrl-V            Copy / cut / paste selection\n");
 	printf("  Ctrl-F, then n / N / Enter          Find next / previous match, Esc cancels\n");
 	printf("  Ctrl-P / F1                         Command palette, Esc cancels\n");
+	printf("  F2                                  File explorer, Esc cancels\n");
 	printf("  Ctrl-Z / Ctrl-Y                     Undo / redo\n");
 	printf("  Ctrl-Space                          Force completion (Tab / Enter accept)\n");
 	printf("  Mouse click / wheel                 Move cursor / scroll\n");

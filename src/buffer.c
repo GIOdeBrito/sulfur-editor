@@ -6,9 +6,12 @@
 
 #include "buffer.h"
 #include "common.h"
+#include "complete.h"
 #include "editor.h"
 #include "highlight.h"
 #include "line.h"
+#include "search.h"
+#include "undo.h"
 #include "util.h"
 
 void editor_ensure_line_cap(size_t needed)
@@ -352,5 +355,48 @@ int editor_save(void)
 	}
 
 	editor_set_status("File saved");
+	return 0;
+}
+
+void editor_close_buffer(void)
+{
+	size_t i;
+
+	for(i = 0; i < g_editor.num_lines; i++)
+	{
+		line_free(&g_editor.lines[i]);
+	}
+
+	g_editor.num_lines = 0;
+	g_editor.cx = 0;
+	g_editor.cy = 0;
+	g_editor.want_cx = 0;
+	g_editor.row_off = 0;
+	g_editor.col_off = 0;
+	g_editor.sel_active = 0;
+	g_editor.sel_ax = 0;
+	g_editor.sel_ay = 0;
+	g_editor.filename[0] = '\0';
+	g_editor.dirty = 0;
+	g_editor.status[0] = '\0';
+	g_editor.eol = EOL_LF;
+	g_editor.trailing_nl = 0;
+	g_editor.filetype = HL_PLAIN;
+	highlight_free();
+	highlight_mark_dirty();
+	undo_reset();
+	search_deactivate();
+	complete_reset();
+}
+
+int editor_switch_file(const char *path)
+{
+	if(path == NULL || path[0] == '\0')
+	{
+		return -1;
+	}
+
+	editor_close_buffer();
+	editor_open(path);
 	return 0;
 }

@@ -7,6 +7,7 @@
 #include "complete.h"
 #include "edit.h"
 #include "editor.h"
+#include "explorer.h"
 #include "focus.h"
 #include "input.h"
 #include "mouse.h"
@@ -111,6 +112,29 @@ int editor_handle_key(int key)
 		return 0;
 	}
 
+	if(palette_is_active() && key == KEY_F(2))
+	{
+		palette_reset();
+
+		if(g_editor.filename[0] != '\0')
+		{
+			explorer_open(g_editor.filename);
+		}
+		else
+		{
+			explorer_open(".");
+		}
+
+		return 0;
+	}
+
+	if(explorer_is_active() && (key == CTRL_KEY('p') || key == KEY_F(1)))
+	{
+		explorer_reset();
+		palette_open();
+		return 0;
+	}
+
 	if(palette_is_active())
 	{
 		if(key == KEY_MOUSE)
@@ -124,6 +148,22 @@ int editor_handle_key(int key)
 		else
 		{
 			return palette_handle_key(key);
+		}
+	}
+
+	if(explorer_is_active())
+	{
+		if(key == KEY_MOUSE)
+		{
+			explorer_reset();
+		}
+		else if(key == KEY_RESIZE)
+		{
+			return 0;
+		}
+		else
+		{
+			return explorer_handle_key(key);
 		}
 	}
 
@@ -206,7 +246,24 @@ int editor_handle_key(int key)
 
 	if(key == CTRL_KEY('p') || key == KEY_F(1))
 	{
+		explorer_reset();
 		palette_open();
+		return 0;
+	}
+
+	if(key == KEY_F(2))
+	{
+		palette_reset();
+
+		if(g_editor.filename[0] != '\0')
+		{
+			explorer_open(g_editor.filename);
+		}
+		else
+		{
+			explorer_open(".");
+		}
+
 		return 0;
 	}
 
@@ -381,6 +438,8 @@ void editor_run(void)
 		complete_draw();
 		palette_dim_background();
 		palette_draw();
+		explorer_dim_background();
+		explorer_draw();
 		text_off = editor_text_offset();
 		cursor_line = editor_current_line();
 
@@ -405,6 +464,14 @@ void editor_run(void)
 				palette_query_cursor_x() >= 0 && palette_query_cursor_x() < COLS)
 			{
 				move(palette_query_cursor_y(), palette_query_cursor_x());
+			}
+		}
+		else if(explorer_is_active())
+		{
+			if(explorer_cursor_y() >= 0 && explorer_cursor_y() < LINES &&
+				explorer_cursor_x() >= 0 && explorer_cursor_x() < COLS)
+			{
+				move(explorer_cursor_y(), explorer_cursor_x());
 			}
 		}
 		else

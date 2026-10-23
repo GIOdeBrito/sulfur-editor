@@ -25,6 +25,7 @@ Run as `build/sulf [filename]`.
 | `Ctrl-C` / `Ctrl-X` / `Ctrl-V` | Copy / cut / paste selection |
 | `Ctrl-F`, then `n` / `N` / `Enter` | Find next / previous match, `Esc` cancels |
 | `Ctrl-P` / `F1` | Command palette, `Esc` cancels |
+| `F2` | File explorer, `Esc` cancels |
 | `Ctrl-Z` / `Ctrl-Y` | Undo / redo |
 | `Ctrl-Space` | Force completion (`Tab` / `Enter` accept) |
 | Mouse click / wheel | Move cursor / scroll |

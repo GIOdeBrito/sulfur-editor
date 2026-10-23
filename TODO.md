@@ -1,6 +1,7 @@
 # TODO
 
 Ideas for future work, roughly ordered by value/effort.
+Ideas only — never implement unasked.
 
 ## Editing
 - Bracket/quote auto-close with skip-over on the closing char
@@ -14,15 +15,27 @@ Ideas for future work, roughly ordered by value/effort.
 - Find & replace with `y/n/a` confirm per match
 - Go to line (`Ctrl-G`): prompt for a number, clamp like page moves
 - Matching-bracket jump (`%` or `Ctrl-]`) using the C highlighter state
+- Go-to-definition / back via ctags file (no LSP yet)
+- Code folding (per-indent or brace-based)
+
+## Status & chrome
+- Status enrichment: `cx`/col, encoding, branch, diag count
+- Relative/hybrid line numbers toggle
 
 ## Quality of life
 - Word wrap toggle (soft wrap, no buffer change)
 - Periodic backup file (`.#name` + restore prompt)
+- Multi-buffer/tabs + split view (breaks single `g_editor`)
+- File explorer / fuzzy open
+- Config file (`~/.config/sulf`: keys, theme, `TAB_WIDTH`)
 
-## Platform
+## Platform / IDE growth
 - 256-color / truecolor palette detection, theme option
 - Clipboard integration: OSC-52 yank, bracketed paste
 - Wider highlight coverage: `.py`, `.js`, `.sh` keyword sets
 - Man page (README covers 1.0 docs)
 - Basic unit tests for buffer/edit ops (currently verified via headless pty only)
-
+- Async job control (lint/build/run in background)
+- LSP stdio integration (diagnostics/completion)
+- Git diff/blame gutter markers
+- Incremental highlight (replace full rescan on dirty)

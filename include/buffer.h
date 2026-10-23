@@ -9,5 +9,7 @@ void editor_insert_line_at(size_t at, const char *text, size_t len);
 const char *editor_eol_name(void);
 void editor_open(const char *filename);
 int editor_save(void);
+void editor_close_buffer(void);
+int editor_switch_file(const char *path);
 
 #endif

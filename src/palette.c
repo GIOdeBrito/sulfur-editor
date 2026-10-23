@@ -7,13 +7,14 @@
 #include "complete.h"
 #include "edit.h"
 #include "editor.h"
+#include "explorer.h"
 #include "input.h"
 #include "palette.h"
 #include "search.h"
 #include "undo.h"
 
 #define PALETTE_MAX_QUERY 64
-#define PALETTE_MAX_ITEMS 16
+#define PALETTE_MAX_ITEMS 17
 #define PALETTE_MAX_VISIBLE 8
 #define PALETTE_MODAL_CONTENT 40
 
@@ -22,6 +23,7 @@ typedef enum
 	PAL_SAVE,
 	PAL_SAVE_AS,
 	PAL_QUIT,
+	PAL_OPEN_FILE,
 	PAL_FIND,
 	PAL_FIND_NEXT,
 	PAL_FIND_PREV,
@@ -48,6 +50,7 @@ static const PaletteItem s_table[] =
 	{ "Save", PAL_SAVE },
 	{ "Save As...", PAL_SAVE_AS },
 	{ "Quit", PAL_QUIT },
+	{ "Open File...", PAL_OPEN_FILE },
 	{ "Find...", PAL_FIND },
 	{ "Find Next", PAL_FIND_NEXT },
 	{ "Find Previous", PAL_FIND_PREV },
@@ -140,6 +143,7 @@ void palette_open(void)
 {
 	complete_reset();
 	search_deactivate();
+	explorer_reset();
 	s_palette.active = 1;
 	s_palette.query[0] = '\0';
 	palette_refilter();
@@ -215,6 +219,20 @@ static int palette_run_selected(void)
 	if(action == PAL_QUIT)
 	{
 		return editor_request_quit();
+	}
+
+	if(action == PAL_OPEN_FILE)
+	{
+		if(g_editor.filename[0] != '\0')
+		{
+			explorer_open(g_editor.filename);
+		}
+		else
+		{
+			explorer_open(".");
+		}
+
+		return 0;
 	}
 
 	if(action == PAL_FIND)
