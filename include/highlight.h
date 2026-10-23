@@ -6,7 +6,8 @@
 typedef enum
 {
 	HL_PLAIN,
-	HL_C
+	HL_C,
+	HL_MD
 } HlFiletype;
 
 typedef enum

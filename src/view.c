@@ -302,7 +302,7 @@ static HlClass editor_map_class(Line *line, size_t row)
 	HlClass best;
 	size_t best_n;
 
-	if(g_editor.filetype != HL_C || highlight_use_color() == 0)
+	if(g_editor.filetype == HL_PLAIN || highlight_use_color() == 0)
 	{
 		return HL_NORMAL;
 	}
@@ -631,7 +631,7 @@ void editor_draw_lines(void)
 
 		line = &g_editor.lines[file_row];
 
-		if(g_editor.filetype == HL_C && highlight_use_color())
+		if(g_editor.filetype != HL_PLAIN && highlight_use_color())
 		{
 			editor_draw_colored_line(y, text_x, line, file_row, view_cols);
 			continue;
@@ -720,7 +720,7 @@ void editor_draw_status(void)
 		snprintf(left, sizeof(left), "%s%s", g_editor.filename, g_editor.dirty ? " *" : "");
 	}
 
-	snprintf(right, sizeof(right), "%s %s %zu/%zu  Ctrl-Q/X quit | F1 panel", editor_eol_name(), g_editor.filetype == HL_C ? "C" : "-", g_editor.cy + 1, g_editor.num_lines);
+	snprintf(right, sizeof(right), "%s %s %zu/%zu  Ctrl-Q/X quit | F1 panel", editor_eol_name(), g_editor.filetype == HL_C ? "C" : (g_editor.filetype == HL_MD ? "MD" : "-"), g_editor.cy + 1, g_editor.num_lines);
 	attron(A_REVERSE);
 	move(status_row, 0);
 	clrtoeol();
