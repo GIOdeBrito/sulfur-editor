@@ -344,6 +344,7 @@ void editor_run(void)
 		editor_draw_lines();
 		editor_draw_status();
 		complete_draw();
+		palette_dim_background();
 		palette_draw();
 		text_off = editor_text_offset();
 		cursor_x = text_off + (int)g_editor.cx - (int)g_editor.col_off;

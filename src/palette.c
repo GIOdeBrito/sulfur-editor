@@ -390,6 +390,72 @@ static void palette_box(int *x, int *y, int *w, int *h, int visible)
 	*h = visible + 3;
 }
 
+static int palette_visible_rows(void)
+{
+	int visible;
+	int y;
+
+	visible = s_palette.count;
+
+	if(visible > PALETTE_MAX_VISIBLE)
+	{
+		visible = PALETTE_MAX_VISIBLE;
+	}
+
+	y = 1;
+
+	while(visible > 0 && y + visible + 3 > LINES - 2)
+	{
+		visible--;
+	}
+
+	return visible;
+}
+
+void palette_dim_background(void)
+{
+	int visible;
+	int x;
+	int y;
+	int w;
+	int h;
+	int row;
+	int col;
+
+	if(s_palette.active == 0)
+	{
+		return;
+	}
+
+	if(LINES < 5 || COLS < 10)
+	{
+		return;
+	}
+
+	visible = palette_visible_rows();
+	palette_box(&x, &y, &w, &h, visible);
+
+	for(row = 0; row < LINES; row++)
+	{
+		for(col = 0; col < COLS; col++)
+		{
+			chtype cell;
+
+			if(col >= x && col < x + w && row >= y && row < y + h)
+			{
+				continue;
+			}
+
+			cell = mvwinch(stdscr, row, col);
+
+			if((cell & A_DIM) == 0)
+			{
+				mvaddch(row, col, cell | A_DIM);
+			}
+		}
+	}
+}
+
 int palette_query_cursor_x(void)
 {
 	int x;
@@ -441,20 +507,7 @@ void palette_draw(void)
 		return;
 	}
 
-	visible = s_palette.count;
-
-	if(visible > PALETTE_MAX_VISIBLE)
-	{
-		visible = PALETTE_MAX_VISIBLE;
-	}
-
-	palette_box(&x, &y, &w, &h, visible);
-
-	while(visible > 0 && y + visible + 3 > LINES - 2)
-	{
-		visible--;
-	}
-
+	visible = palette_visible_rows();
 	palette_box(&x, &y, &w, &h, visible);
 	content = w - 2;
 	mvaddch(y, x, ACS_ULCORNER);
