@@ -29,7 +29,7 @@ C11 ncurses text editor. Single binary, no test framework, no CI.
 
 ## Feature contracts
 
-- Complete (`COMPLETE_MIN_PREFIX 2`, fixed 32×64 tables, no malloc): auto-popup after 2 word chars + `Ctrl-Space` force; `Tab`/`Enter` accept, `Esc` cancels; case-sensitive, frequency then `strcmp` A-Z. Accept clears selection and deactivates search.
+- Complete (`COMPLETE_MIN_PREFIX 2`, fixed 32×64 tables, no malloc): auto-popup after 2 word chars + `Ctrl-Space` force; `Tab`/`Enter` accept, `Esc` cancels; case-sensitive, frequency then `strcmp` A-Z. Accept clears selection, deactivates search, and appends a trailing space (skipped when one already follows).
 - Highlight: C (`.c`/`.h`) + Markdown (`.md`), default-background palette, per-line cache + full rescan on dirty flag. C tracks `/* */` state, MD tracks ```` ``` ````/`~~~` fence state; MD reuses the C palette (headings keyword, code string, bold number, italic preproc, quote comment, lists/rules preproc, link text keyword + URL string).
 - Mouse: click-to-move on text + wheel scroll (±3 rows, roams below EOF like Arrow Down bounded by `editor_max_cy()`) + map-column jump (empty buckets ignored); silent-off fallback when terminal lacks support. Never touches `sel_active` (no drag/release: `REPORT_MOUSE_POSITION`/`BUTTON1_RELEASED` off). Text clicks clear selection, reset completion, deactivate search (query kept).
 - Map: always-visible right edge (`editor_map_width()` = 4: 3 content + `ACS_VLINE`; 0 when it would leave <1 text col, `view_cols` already narrowed). Buckets via `editor_map_bucket_start()` — 1:1 top-packed when the file fits, else floor-proportional. Per-column coverage of the longest line in the bucket (each cell samples one horizontal third of `view_cols`; last cell also covers overflow past `view_cols`). Tint is dominant non-`NORMAL` class of that line via `highlight_attr | A_REVERSE` (plain when unhighlighted/colorless). Viewport wash is `A_REVERSE` (`+A_BOLD` when covered); cursor bucket adds `A_UNDERLINE`.
@@ -43,7 +43,7 @@ C11 ncurses text editor. Single binary, no test framework, no CI.
 
 ## Verification (headless pty, no fixtures)
 
-- Run with `TERM=xterm` under `pty.fork()`; drive keys, then `Ctrl-Q` (+`n` if dirty) to exit.
+- Run with `TERM=xterm` under `pty.fork()`; wait for the first full draw before driving keys (early pty writes are swallowed — gate on >500 bytes, pace keys ~0.5s); then `Ctrl-Q` (+`n` if dirty) to exit.
 - Mouse input must be SGR-1006: `\x1b[<btn;x;yM`, 1-based (`0`=press, `64`/`65`=wheel); release is lowercase-`m`-terminated (`\x1b[<3;x;ym`).
 - ncurses sends delta frames (`\x1b[nS`/`\x1b[nT` scrolls, single-cell status updates): assert on **single-frame drains** or **last match** of `\x1b[r;cH` / `\x1b[nG` — never byte counts or full-status regexes over accumulated output.
 - Keep throwaway verify scripts in `/tmp`, not the repo.

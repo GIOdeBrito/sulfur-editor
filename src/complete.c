@@ -309,6 +309,13 @@ void complete_accept(void)
 	memcpy(&line->data[s_complete.prefix_start], candidate, candidate_len);
 	line->len = line->len - prefix_len + candidate_len;
 	g_editor.cx = s_complete.prefix_start + candidate_len;
+
+	if(g_editor.cx >= line->len || line->data[g_editor.cx] != ' ')
+	{
+		line_insert_char(line, g_editor.cx, ' ');
+		g_editor.cx++;
+	}
+
 	g_editor.want_cx = g_editor.cx;
 	g_editor.dirty = 1;
 	highlight_mark_dirty();
