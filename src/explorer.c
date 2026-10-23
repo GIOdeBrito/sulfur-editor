@@ -1112,6 +1112,14 @@ void explorer_draw(void)
 	}
 
 	mvaddch(y, x + content + 1, ACS_URCORNER);
+
+	if(tree_w >= 17)
+	{
+		attron(A_BOLD);
+		mvaddnstr(y, x + 1 + (tree_w - 15) / 2, " File Explorer ", 15);
+		attroff(A_BOLD);
+	}
+
 	mvaddch(y + 1, x, ACS_VLINE);
 
 	for(i = 0; i < content; i++)
@@ -1127,9 +1135,8 @@ void explorer_draw(void)
 	for(i = 0; i < visible; i++)
 	{
 		int row;
-		int selected;
+		int has_entry;
 		int j;
-		int idx;
 
 		row = y + 2 + i;
 		mvaddch(row, x, ACS_VLINE);
@@ -1139,31 +1146,28 @@ void explorer_draw(void)
 			mvaddch(row, x + 1 + j, ' ');
 		}
 
-		if(preview_w > 0)
-		{
-			mvaddch(row, x + 1 + tree_w, ACS_VLINE);
-		}
-
 		mvaddch(row, x + content + 1, ACS_VLINE);
+		has_entry = (s_explorer.scroll + i < s_explorer.count);
 
-		if(s_explorer.scroll + i >= s_explorer.count)
+		if(has_entry != 0)
 		{
-			continue;
-		}
+			int selected;
+			int idx;
 
-		selected = (s_explorer.scroll + i == s_explorer.selected);
+			selected = (s_explorer.scroll + i == s_explorer.selected);
 
-		if(selected != 0)
-		{
-			attron(A_REVERSE);
-		}
+			if(selected != 0)
+			{
+				attron(A_REVERSE);
+			}
 
-		idx = s_explorer.filtered[s_explorer.scroll + i];
-		mvaddnstr(row, x + 1, s_explorer.names[idx], tree_w);
+			idx = s_explorer.filtered[s_explorer.scroll + i];
+			mvaddnstr(row, x + 1, s_explorer.names[idx], tree_w);
 
-		if(selected != 0)
-		{
-			attroff(A_REVERSE);
+			if(selected != 0)
+			{
+				attroff(A_REVERSE);
+			}
 		}
 
 		if(preview_w > 0)

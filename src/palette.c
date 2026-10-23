@@ -591,6 +591,14 @@ void palette_draw(void)
 	}
 
 	mvaddch(y, x + content + 1, ACS_URCORNER);
+
+	if(content >= 19)
+	{
+		attron(A_BOLD);
+		mvaddnstr(y, x + 1 + (content - 17) / 2, " Command Palette ", 17);
+		attroff(A_BOLD);
+	}
+
 	mvaddch(y + 1, x, ACS_VLINE);
 
 	for(i = 0; i < content; i++)
