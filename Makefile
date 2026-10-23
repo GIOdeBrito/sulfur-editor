@@ -6,10 +6,10 @@ INC = include
 BLD = build
 OBJS = $(BLD)/main.o $(BLD)/line.o $(BLD)/util.o $(BLD)/editor.o $(BLD)/buffer.o $(BLD)/edit.o $(BLD)/view.o $(BLD)/input.o $(BLD)/screen.o $(BLD)/complete.o $(BLD)/highlight.o $(BLD)/mouse.o $(BLD)/undo.o $(BLD)/search.o $(BLD)/focus.o $(BLD)/palette.o
 
-all: $(BLD)/editor
+all: $(BLD)/sulf
 
-$(BLD)/editor: $(OBJS)
-	$(CC) $(CFLAGS) -o $(BLD)/editor $(OBJS) $(LDLIBS)
+$(BLD)/sulf: $(OBJS)
+	$(CC) $(CFLAGS) -o $(BLD)/sulf $(OBJS) $(LDLIBS)
 
 $(BLD)/%.o: $(SRC)/%.c | $(BLD)
 	$(CC) $(CFLAGS) -c $< -o $@

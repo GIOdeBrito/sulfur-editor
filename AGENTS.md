@@ -5,8 +5,8 @@ C11 ncurses text editor. Single binary, no test framework, no CI.
 
 ## Build
 
-- `make` → `build/editor`. `make clean` wipes `build/` (gitignored — never commit it).
-- Run as `build/editor [filename]` (`main.c` rejects `argc > 2`).
+- `make` → `build/sulf`. `make clean` wipes `build/` (gitignored — never commit it).
+- Run as `build/sulf [filename]` (`main.c` rejects `argc > 2`).
 - Requires `libncurses-dev`; link flag is `-lncurses` (`Makefile` `LDLIBS`).
 - `make` must be zero-warning (`-Wall -Wextra -std=c11 -D_POSIX_C_SOURCE=200809L`).
 - New `.c` file: add to `Makefile` `OBJS` **and** add a per-object header-dep line, else incremental builds go stale.
