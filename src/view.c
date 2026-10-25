@@ -6,6 +6,7 @@
 #include "common.h"
 #include "editor.h"
 #include "highlight.h"
+#include "line.h"
 #include "search.h"
 #include "tabs.h"
 #include "view.h"
@@ -850,14 +851,17 @@ void editor_draw_status(void)
 	int msg_row;
 	int status_row;
 	char left[FILENAME_LIMIT + 64];
-	char right[64];
+	char right[96];
 	Buffer *b;
+	View *v;
 	const char *fname;
 	int dirty;
 	HlFiletype ft;
 	size_t cy;
+	size_t col;
 	size_t num_lines;
 	const char *eol;
+	Line *cursor_line;
 
 	msg_row = LINES - 2;
 	status_row = LINES - 1;
@@ -872,15 +876,26 @@ void editor_draw_status(void)
 	}
 
 	b = tabs_active();
+	v = tabs_view();
 
-	if(b != NULL)
+	if(b != NULL && v != NULL)
 	{
 		fname = b->filename;
 		dirty = b->dirty;
 		ft = b->filetype;
-		cy = tabs_view()->cy;
+		cy = v->cy;
 		num_lines = b->num_lines;
 		eol = editor_eol_name(b);
+		cursor_line = editor_current_line(b, v);
+
+		if(cursor_line != NULL)
+		{
+			col = line_cells_upto(cursor_line, v->cx) + 1;
+		}
+		else
+		{
+			col = v->cx + 1;
+		}
 	}
 	else
 	{
@@ -888,6 +903,7 @@ void editor_draw_status(void)
 		dirty = 0;
 		ft = HL_PLAIN;
 		cy = 0;
+		col = 1;
 		num_lines = 0;
 		eol = "LF";
 	}
@@ -901,7 +917,7 @@ void editor_draw_status(void)
 		snprintf(left, sizeof(left), "%s%s", fname, dirty ? " *" : "");
 	}
 
-	snprintf(right, sizeof(right), "%s %s %zu/%zu  Ctrl-Q quit | F1 palette | F2 explorer", eol, ft == HL_C ? "C" : (ft == HL_MD ? "MD" : "-"), cy + 1, num_lines);
+	snprintf(right, sizeof(right), "%s %s %zu:%zu/%zu  Ctrl-Q quit | F1 palette | F2 explorer", eol, ft == HL_C ? "C" : (ft == HL_MD ? "MD" : "-"), cy + 1, col, num_lines);
 	attron(A_REVERSE);
 	move(status_row, 0);
 	clrtoeol();

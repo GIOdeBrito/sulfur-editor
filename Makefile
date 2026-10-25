@@ -20,7 +20,7 @@ $(BLD)/util.o: $(SRC)/util.c $(INC)/util.h $(INC)/screen.h
 $(BLD)/editor.o: $(SRC)/editor.c $(INC)/clipboard.h $(INC)/common.h $(INC)/complete.h $(INC)/editor.h $(INC)/highlight.h $(INC)/line.h $(INC)/search.h $(INC)/undo.h $(INC)/util.h $(INC)/view.h
 $(BLD)/buffer.o: $(SRC)/buffer.c $(INC)/buffer.h $(INC)/common.h $(INC)/complete.h $(INC)/editor.h $(INC)/highlight.h $(INC)/line.h $(INC)/search.h $(INC)/undo.h $(INC)/util.h
 $(BLD)/edit.o: $(SRC)/edit.c $(INC)/edit.h $(INC)/buffer.h $(INC)/common.h $(INC)/editor.h $(INC)/highlight.h $(INC)/line.h $(INC)/undo.h $(INC)/view.h
-$(BLD)/view.o: $(SRC)/view.c $(INC)/view.h $(INC)/buffer.h $(INC)/common.h $(INC)/editor.h $(INC)/highlight.h $(INC)/search.h
+$(BLD)/view.o: $(SRC)/view.c $(INC)/view.h $(INC)/buffer.h $(INC)/common.h $(INC)/editor.h $(INC)/highlight.h $(INC)/line.h $(INC)/search.h
 $(BLD)/input.o: $(SRC)/input.c $(INC)/input.h $(INC)/buffer.h $(INC)/clipboard.h $(INC)/common.h $(INC)/complete.h $(INC)/edit.h $(INC)/editor.h $(INC)/explorer.h $(INC)/focus.h $(INC)/mouse.h $(INC)/palette.h $(INC)/search.h $(INC)/undo.h $(INC)/view.h
 $(BLD)/screen.o: $(SRC)/screen.c $(INC)/screen.h $(INC)/focus.h $(INC)/highlight.h $(INC)/mouse.h
 $(BLD)/complete.o: $(SRC)/complete.c $(INC)/complete.h $(INC)/common.h $(INC)/edit.h $(INC)/editor.h $(INC)/highlight.h $(INC)/line.h $(INC)/search.h $(INC)/undo.h $(INC)/view.h

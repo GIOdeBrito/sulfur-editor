@@ -19,7 +19,6 @@ Ideas only — never implement unasked.
 - Code folding (per-indent or brace-based)
 
 ## Status & chrome
-- Status enrichment: `cx`/col, encoding, branch, diag count
 - Relative/hybrid line numbers toggle
 
 ## Quality of life
