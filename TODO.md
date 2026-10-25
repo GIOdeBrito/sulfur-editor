@@ -35,5 +35,5 @@ Ideas only — never implement unasked.
 - Basic unit tests for buffer/edit ops (currently verified via headless pty only)
 - Async job control (lint/build/run in background)
 - LSP stdio integration (diagnostics/completion)
-- Git diff/blame gutter markers
+- Git blame markers (diff markers done)
 - Incremental highlight (replace full rescan on dirty)

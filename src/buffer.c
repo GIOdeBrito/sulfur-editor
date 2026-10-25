@@ -8,6 +8,7 @@
 #include "common.h"
 #include "complete.h"
 #include "editor.h"
+#include "git.h"
 #include "highlight.h"
 #include "line.h"
 #include "search.h"
@@ -245,6 +246,8 @@ void editor_open(Buffer *b, const char *filename)
 	}
 
 	highlight_mark_dirty(b);
+	git_reset(b);
+	git_refresh(b);
 	editor_set_status("File loaded");
 }
 
@@ -395,6 +398,8 @@ int editor_save(Buffer *b)
 	}
 
 	b->dirty = 0;
+	git_invalidate();
+	git_refresh(b);
 
 	if(b->eol == EOL_MIXED)
 	{
@@ -424,4 +429,5 @@ void editor_close_buffer(Buffer *b)
 	undo_reset(b);
 	search_deactivate();
 	complete_reset(b);
+	git_reset(b);
 }

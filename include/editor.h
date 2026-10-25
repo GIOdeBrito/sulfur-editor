@@ -3,6 +3,7 @@
 
 #include "common.h"
 #include "complete.h"
+#include "git.h"
 #include "highlight.h"
 #include "line.h"
 #include "search.h"
@@ -31,6 +32,7 @@ struct Buffer
 	HlCache hl;
 	SearchState search;
 	CompleteState complete;
+	GitState git;
 	int used;
 };
 

@@ -5,6 +5,7 @@
 #include "buffer.h"
 #include "common.h"
 #include "editor.h"
+#include "git.h"
 #include "highlight.h"
 #include "line.h"
 #include "search.h"
@@ -677,6 +678,34 @@ static void editor_draw_map(Buffer *b, View *v)
 	}
 }
 
+static void editor_draw_gutter_sep(Buffer *b, int y, int gutter, size_t file_row)
+{
+	int marker;
+	int attr;
+
+	marker = git_marker(b, file_row);
+
+	if(marker == GIT_NONE)
+	{
+		mvaddch(y + VIEW_TOP, gutter, ACS_VLINE);
+		return;
+	}
+
+	attr = highlight_git_attr(marker);
+
+	if(attr != A_NORMAL)
+	{
+		attron(attr);
+	}
+
+	mvaddch(y + VIEW_TOP, gutter, ACS_VLINE);
+
+	if(attr != A_NORMAL)
+	{
+		attroff(attr);
+	}
+}
+
 void editor_draw_lines(Buffer *b, View *v)
 {
 	int view_rows;
@@ -732,7 +761,7 @@ void editor_draw_lines(Buffer *b, View *v)
 			attroff(A_REVERSE);
 		}
 
-		mvaddch(y + VIEW_TOP, gutter, ACS_VLINE);
+		editor_draw_gutter_sep(b, y, gutter, file_row);
 
 		if(text_x >= COLS)
 		{

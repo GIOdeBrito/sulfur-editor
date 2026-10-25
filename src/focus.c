@@ -4,6 +4,7 @@
 #include "buffer.h"
 #include "editor.h"
 #include "focus.h"
+#include "git.h"
 #include "tabs.h"
 
 void focus_init(void)
@@ -32,6 +33,8 @@ int focus_handle_key(int key)
 
 	if(key != FOCUS_OUT_KEY)
 	{
+		git_invalidate();
+		git_refresh(tabs_active());
 		return 1;
 	}
 

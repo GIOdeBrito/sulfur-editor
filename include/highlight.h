@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include "common.h"
+#include "git.h"
 
 typedef enum
 {
@@ -36,6 +37,8 @@ void highlight_free(Buffer *b);
 void highlight_init_color(void);
 int highlight_use_color(void);
 int highlight_attr(HlClass cls);
+/* Separator tint for a git gutter marker. A_NORMAL when colors are off. */
+int highlight_git_attr(GitMarker marker);
 const unsigned char *highlight_classes(Buffer *b, size_t row);
 
 #endif

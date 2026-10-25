@@ -6,6 +6,7 @@
 #include "common.h"
 #include "complete.h"
 #include "editor.h"
+#include "git.h"
 #include "search.h"
 #include "tabs.h"
 #include "undo.h"
@@ -54,6 +55,7 @@ static void tabs_on_switch(void)
 	editor_select_clear(&s_view);
 	complete_reset(b);
 	search_deactivate();
+	git_refresh(b);
 }
 
 void tabs_init(void)

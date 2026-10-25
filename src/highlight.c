@@ -784,6 +784,31 @@ int highlight_attr(HlClass cls)
 	return A_NORMAL;
 }
 
+int highlight_git_attr(GitMarker marker)
+{
+	if(s_color == 0)
+	{
+		return A_NORMAL;
+	}
+
+	if(marker == GIT_ADDED)
+	{
+		return COLOR_PAIR(HL_PAIR_STRING);
+	}
+
+	if(marker == GIT_MODIFIED)
+	{
+		return COLOR_PAIR(HL_PAIR_KEYWORD);
+	}
+
+	if(marker == GIT_DELETED)
+	{
+		return COLOR_PAIR(HL_PAIR_PREPROC);
+	}
+
+	return A_NORMAL;
+}
+
 const unsigned char *highlight_classes(Buffer *b, size_t row)
 {
 	Line *line;
