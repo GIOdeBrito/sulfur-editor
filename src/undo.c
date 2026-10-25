@@ -3,6 +3,7 @@
 
 #include "common.h"
 #include "editor.h"
+#include "git.h"
 #include "highlight.h"
 #include "line.h"
 #include "undo.h"
@@ -133,6 +134,7 @@ static void undo_state_restore(Buffer *b, View *v, const UndoSlot *state)
 	b->dirty = state->dirty;
 	editor_clamp_cursor(b, v);
 	highlight_mark_dirty(b);
+	git_touch(b);
 }
 
 static void undo_stack_clear(UndoSlot *stack, size_t *count)

@@ -5,6 +5,7 @@
 #include "common.h"
 #include "edit.h"
 #include "editor.h"
+#include "git.h"
 #include "highlight.h"
 #include "line.h"
 #include "search.h"
@@ -264,6 +265,7 @@ void editor_paste(Buffer *b, View *v)
 		b->dirty = 1;
 		v->want_cx = v->cx;
 		highlight_mark_dirty(b);
+		git_touch(b);
 		undo_end(b, v, UNDO_OTHER);
 		editor_set_status("Pasted");
 		return;

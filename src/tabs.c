@@ -55,7 +55,15 @@ static void tabs_on_switch(void)
 	editor_select_clear(&s_view);
 	complete_reset(b);
 	search_deactivate();
-	git_refresh(b);
+
+	if(b->dirty != 0)
+	{
+		git_refresh_live(b);
+	}
+	else
+	{
+		git_refresh(b);
+	}
 }
 
 void tabs_init(void)

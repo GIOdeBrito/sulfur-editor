@@ -33,8 +33,20 @@ int focus_handle_key(int key)
 
 	if(key != FOCUS_OUT_KEY)
 	{
+		Buffer *b;
+
 		git_invalidate();
-		git_refresh(tabs_active());
+		b = tabs_active();
+
+		if(b != NULL && b->dirty != 0)
+		{
+			git_refresh_live(b);
+		}
+		else
+		{
+			git_refresh(b);
+		}
+
 		return 1;
 	}
 

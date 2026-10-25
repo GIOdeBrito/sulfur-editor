@@ -5,6 +5,7 @@
 #include "complete.h"
 #include "edit.h"
 #include "editor.h"
+#include "git.h"
 #include "highlight.h"
 #include "line.h"
 #include "search.h"
@@ -357,6 +358,7 @@ void complete_accept(Buffer *b, View *v)
 	v->want_cx = v->cx;
 	b->dirty = 1;
 	highlight_mark_dirty(b);
+	git_touch(b);
 	undo_end(b, v, UNDO_OTHER);
 	complete_reset(b);
 }

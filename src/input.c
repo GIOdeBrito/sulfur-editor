@@ -9,6 +9,7 @@
 #include "editor.h"
 #include "explorer.h"
 #include "focus.h"
+#include "git.h"
 #include "input.h"
 #include "mouse.h"
 #include "palette.h"
@@ -513,6 +514,18 @@ void editor_run(void)
 		if(b == NULL || v == NULL)
 		{
 			return;
+		}
+
+		/* Live git markers: dirty buffers diff unsaved content vs HEAD,
+		clean buffers diff disk vs HEAD. Guarded inside (stale+epoch),
+		so navigation frames spawn nothing; never runs in the draw path. */
+		if(b->dirty != 0)
+		{
+			git_refresh_live(b);
+		}
+		else
+		{
+			git_refresh(b);
 		}
 
 		editor_clamp_cursor(b, v);

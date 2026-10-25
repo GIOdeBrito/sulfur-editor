@@ -23,14 +23,21 @@ typedef struct
 	unsigned char kind[GIT_MAX_HUNKS];
 	int count;
 	unsigned long epoch;
+	int live_stale;
 } GitState;
 
 void git_reset(Buffer *b);
 /* Bump the global clock so the next git_refresh recomputes. */
 void git_invalidate(void);
+/* Mark the live (unsaved-buffer) markers stale after an edit. */
+void git_touch(Buffer *b);
 /* Recompute markers for b unless already current. Never touches
 the screen; safe to call from open/save/switch/focus hooks. */
 void git_refresh(Buffer *b);
+/* Diff the unsaved buffer content against HEAD so markers update
+on the fly while dirty. Never touches the screen; call lazily
+from the input loop (at most once per frame), never from draw. */
+void git_refresh_live(Buffer *b);
 /* Pure lookup for the draw path: no syscalls, no allocation. */
 int git_marker(Buffer *b, size_t file_row);
 

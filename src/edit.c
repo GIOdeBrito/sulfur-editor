@@ -5,6 +5,7 @@
 #include "common.h"
 #include "edit.h"
 #include "editor.h"
+#include "git.h"
 #include "highlight.h"
 #include "line.h"
 #include "undo.h"
@@ -87,6 +88,7 @@ int editor_delete_selection(Buffer *b, View *v)
 	b->dirty = 1;
 	editor_select_clear(v);
 	highlight_mark_dirty(b);
+	git_touch(b);
 	return 1;
 }
 
@@ -154,6 +156,7 @@ int editor_indent_selection(Buffer *b, View *v)
 
 	b->dirty = 1;
 	highlight_mark_dirty(b);
+	git_touch(b);
 	return 1;
 }
 
@@ -279,6 +282,7 @@ void editor_unindent(Buffer *b, View *v)
 			{
 				b->dirty = 1;
 				highlight_mark_dirty(b);
+	git_touch(b);
 				undo_end(b, v, UNDO_OTHER);
 			}
 
@@ -320,6 +324,7 @@ void editor_unindent(Buffer *b, View *v)
 		v->want_cx = v->cx;
 		b->dirty = 1;
 		highlight_mark_dirty(b);
+	git_touch(b);
 		undo_end(b, v, UNDO_OTHER);
 	}
 }
@@ -365,6 +370,7 @@ void editor_insert_char(Buffer *b, View *v, char c)
 	b->dirty = 1;
 	v->want_cx = v->cx;
 	highlight_mark_dirty(b);
+	git_touch(b);
 	undo_end(b, v, kind);
 }
 
@@ -445,6 +451,7 @@ void editor_insert_newline(Buffer *b, View *v)
 	v->want_cx = indent;
 	b->dirty = 1;
 	highlight_mark_dirty(b);
+	git_touch(b);
 	undo_end(b, v, UNDO_OTHER);
 }
 
@@ -508,6 +515,7 @@ void editor_delete_backspace(Buffer *b, View *v)
 		b->dirty = 1;
 		v->want_cx = v->cx;
 		highlight_mark_dirty(b);
+	git_touch(b);
 		undo_end(b, v, kind);
 		return;
 	}
@@ -532,6 +540,7 @@ void editor_delete_backspace(Buffer *b, View *v)
 	v->want_cx = v->cx;
 	b->dirty = 1;
 	highlight_mark_dirty(b);
+	git_touch(b);
 	undo_end(b, v, kind);
 }
 
@@ -577,6 +586,7 @@ void editor_delete_char(Buffer *b, View *v)
 
 		b->dirty = 1;
 		highlight_mark_dirty(b);
+	git_touch(b);
 		undo_end(b, v, UNDO_OTHER);
 		return;
 	}
@@ -597,6 +607,7 @@ void editor_delete_char(Buffer *b, View *v)
 	b->num_lines--;
 	b->dirty = 1;
 	highlight_mark_dirty(b);
+	git_touch(b);
 	undo_end(b, v, UNDO_OTHER);
 }
 
