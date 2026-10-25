@@ -4,6 +4,7 @@
 
 #include "buffer.h"
 #include "common.h"
+#include "config.h"
 #include "editor.h"
 #include "git.h"
 #include "highlight.h"
@@ -16,16 +17,25 @@
 #define MAP_WIDTH 4
 
 /* Tab stops are display-only: buffers keep raw '\t' bytes, which expand
-to the next TAB_WIDTH column here. rel is the display column measured
+to the next tab stop here. rel is the display column measured
 from the start of the line (not the viewport). */
 static int editor_tab_cells(int rel)
 {
+	int width;
+
+	width = config_tab_width();
+
+	if(width < CONFIG_MIN_TAB_WIDTH || width > CONFIG_MAX_TAB_WIDTH)
+	{
+		width = CONFIG_DEFAULT_TAB_WIDTH;
+	}
+
 	if(rel < 0)
 	{
 		rel = 0;
 	}
 
-	return TAB_WIDTH - (rel % TAB_WIDTH);
+	return width - (rel % width);
 }
 
 static int editor_draw_width(const Line *line, size_t idx, int rel)

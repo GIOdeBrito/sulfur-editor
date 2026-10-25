@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "common.h"
+#include "config.h"
 #include "line.h"
 #include "util.h"
 
@@ -417,13 +418,21 @@ size_t line_char_next(const Line *line, size_t idx)
 static int line_tab_advance(int col)
 {
 	int next;
+	int width;
+
+	width = config_tab_width();
+
+	if(width < CONFIG_MIN_TAB_WIDTH || width > CONFIG_MAX_TAB_WIDTH)
+	{
+		width = CONFIG_DEFAULT_TAB_WIDTH;
+	}
 
 	if(col < 0)
 	{
 		col = 0;
 	}
 
-	next = ((col / TAB_WIDTH) + 1) * TAB_WIDTH;
+	next = ((col / width) + 1) * width;
 
 	return next - col;
 }

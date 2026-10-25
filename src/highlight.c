@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "common.h"
+#include "config.h"
 #include "editor.h"
 #include "highlight.h"
 #include "line.h"
@@ -727,6 +728,8 @@ void highlight_free(Buffer *b)
 
 void highlight_init_color(void)
 {
+	int fg;
+
 	s_color = 0;
 
 	if(has_colors() == FALSE)
@@ -741,11 +744,21 @@ void highlight_init_color(void)
 		return;
 	}
 
-	init_pair(HL_PAIR_KEYWORD, COLOR_YELLOW, -1);
-	init_pair(HL_PAIR_STRING, COLOR_GREEN, -1);
-	init_pair(HL_PAIR_COMMENT, COLOR_CYAN, -1);
-	init_pair(HL_PAIR_NUMBER, COLOR_MAGENTA, -1);
-	init_pair(HL_PAIR_PREPROC, COLOR_RED, -1);
+	if(config_highlight_mono() != 0)
+	{
+		return;
+	}
+
+	fg = config_highlight_fg(CONFIG_HL_KEYWORD);
+	init_pair(HL_PAIR_KEYWORD, fg < 0 ? COLOR_YELLOW : fg, -1);
+	fg = config_highlight_fg(CONFIG_HL_STRING);
+	init_pair(HL_PAIR_STRING, fg < 0 ? COLOR_GREEN : fg, -1);
+	fg = config_highlight_fg(CONFIG_HL_COMMENT);
+	init_pair(HL_PAIR_COMMENT, fg < 0 ? COLOR_CYAN : fg, -1);
+	fg = config_highlight_fg(CONFIG_HL_NUMBER);
+	init_pair(HL_PAIR_NUMBER, fg < 0 ? COLOR_MAGENTA : fg, -1);
+	fg = config_highlight_fg(CONFIG_HL_PREPROC);
+	init_pair(HL_PAIR_PREPROC, fg < 0 ? COLOR_RED : fg, -1);
 	s_color = 1;
 }
 

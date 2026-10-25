@@ -5,6 +5,7 @@
 #include "clipboard.h"
 #include "common.h"
 #include "complete.h"
+#include "config.h"
 #include "edit.h"
 #include "editor.h"
 #include "explorer.h"
@@ -157,7 +158,7 @@ int editor_handle_key(int key)
 		return 0;
 	}
 
-	if(palette_is_active() && key == KEY_F(2))
+	if(palette_is_active() && config_key_matches("explorer", key))
 	{
 		Buffer *cur;
 
@@ -176,7 +177,7 @@ int editor_handle_key(int key)
 		return 0;
 	}
 
-	if(explorer_is_active() && (key == CTRL_KEY('p') || key == KEY_F(1)))
+	if(explorer_is_active() && config_key_matches("palette", key))
 	{
 		explorer_reset();
 		palette_open();
@@ -247,12 +248,12 @@ int editor_handle_key(int key)
 		return 0;
 	}
 
-	if(key == CTRL_KEY('q'))
+	if(config_key_matches("quit", key))
 	{
 		return editor_request_quit();
 	}
 
-	if(key == CTRL_KEY('s'))
+	if(config_key_matches("save", key))
 	{
 		if(b->filename[0] == '\0')
 		{
@@ -264,50 +265,50 @@ int editor_handle_key(int key)
 		return 0;
 	}
 
-	if(key == CTRL_KEY('z'))
+	if(config_key_matches("undo", key))
 	{
 		undo_undo(b, v);
 		return 0;
 	}
 
-	if(key == CTRL_KEY('y'))
+	if(config_key_matches("redo", key))
 	{
 		undo_redo(b, v);
 		return 0;
 	}
 
-	if(key == CTRL_KEY('c'))
+	if(config_key_matches("copy", key))
 	{
 		editor_copy(b, v);
 		return 0;
 	}
 
-	if(key == CTRL_KEY('x'))
+	if(config_key_matches("cut", key))
 	{
 		editor_cut(b, v);
 		return 0;
 	}
 
-	if(key == CTRL_KEY('v'))
+	if(config_key_matches("paste", key))
 	{
 		editor_paste(b, v);
 		return 0;
 	}
 
-	if(key == CTRL_KEY('f'))
+	if(config_key_matches("find", key))
 	{
 		search_prompt_and_find(b, v);
 		return 0;
 	}
 
-	if(key == CTRL_KEY('p') || key == KEY_F(1))
+	if(config_key_matches("palette", key))
 	{
 		explorer_reset();
 		palette_open();
 		return 0;
 	}
 
-	if(key == KEY_F(2))
+	if(config_key_matches("explorer", key))
 	{
 		palette_reset();
 
@@ -323,7 +324,7 @@ int editor_handle_key(int key)
 		return 0;
 	}
 
-	if(key == CTRL_KEY(']'))
+	if(config_key_matches("next-tab", key))
 	{
 		if(tabs_next() != 0)
 		{
@@ -333,7 +334,7 @@ int editor_handle_key(int key)
 		return 0;
 	}
 
-	if(key == CTRL_KEY('^'))
+	if(config_key_matches("prev-tab", key))
 	{
 		if(tabs_prev() != 0)
 		{
@@ -343,37 +344,37 @@ int editor_handle_key(int key)
 		return 0;
 	}
 
-	if(key == KEY_LEFT)
+	if(config_key_matches("left", key))
 	{
 		editor_move_left(b, v, 0);
 		return 0;
 	}
 
-	if(key == KEY_RIGHT)
+	if(config_key_matches("right", key))
 	{
 		editor_move_right(b, v, 0);
 		return 0;
 	}
 
-	if(key == KEY_UP)
+	if(config_key_matches("up", key))
 	{
 		editor_move_up(b, v, 0);
 		return 0;
 	}
 
-	if(key == KEY_DOWN)
+	if(config_key_matches("down", key))
 	{
 		editor_move_down(b, v, 0);
 		return 0;
 	}
 
-	if(key == KEY_SLEFT)
+	if(config_key_matches("sel-left", key))
 	{
 		editor_move_left(b, v, 1);
 		return 0;
 	}
 
-	if(key == KEY_SRIGHT)
+	if(config_key_matches("sel-right", key))
 	{
 		editor_move_right(b, v, 1);
 		return 0;
@@ -381,85 +382,85 @@ int editor_handle_key(int key)
 
 	/* ncurses has no KEY_SUP/KEY_SDOWN; xterm Shift+Up/Down arrive
 	via the kri/kind capabilities as KEY_SR/KEY_SF. */
-	if(key == KEY_SR)
+	if(config_key_matches("sel-up", key))
 	{
 		editor_move_up(b, v, 1);
 		return 0;
 	}
 
-	if(key == KEY_SF)
+	if(config_key_matches("sel-down", key))
 	{
 		editor_move_down(b, v, 1);
 		return 0;
 	}
 
-	if(key == KEY_PPAGE)
+	if(config_key_matches("page-up", key))
 	{
 		editor_move_page(b, v, -1, 0);
 		return 0;
 	}
 
-	if(key == KEY_NPAGE)
+	if(config_key_matches("page-down", key))
 	{
 		editor_move_page(b, v, 1, 0);
 		return 0;
 	}
 
-	if(key == KEY_SPREVIOUS)
+	if(config_key_matches("sel-page-up", key))
 	{
 		editor_move_page(b, v, -1, 1);
 		return 0;
 	}
 
-	if(key == KEY_SNEXT)
+	if(config_key_matches("sel-page-down", key))
 	{
 		editor_move_page(b, v, 1, 1);
 		return 0;
 	}
 
-	if(key == KEY_HOME || key == CTRL_KEY('a'))
+	if(config_key_matches("home", key))
 	{
 		editor_line_home(v, 0);
 		return 0;
 	}
 
-	if(key == KEY_END || key == CTRL_KEY('e'))
+	if(config_key_matches("end", key))
 	{
 		editor_line_end(b, v, 0);
 		return 0;
 	}
 
-	if(key == KEY_SHOME)
+	if(config_key_matches("sel-home", key))
 	{
 		editor_line_home(v, 1);
 		return 0;
 	}
 
-	if(key == KEY_SEND)
+	if(config_key_matches("sel-end", key))
 	{
 		editor_line_end(b, v, 1);
 		return 0;
 	}
 
-	if(key == KEY_BTAB)
+	if(config_key_matches("unindent", key))
 	{
 		editor_unindent(b, v);
 		return 0;
 	}
 
-	if(key == KEY_BACKSPACE || key == 127 || key == CTRL_KEY('h'))
+	if(config_key_matches("backspace", key))
 	{
 		editor_delete_backspace(b, v);
 		return 0;
 	}
 
-	if(key == KEY_DC)
+	if(config_key_matches("delete", key))
 	{
 		editor_delete_char(b, v);
 		return 0;
 	}
 
-	if(key == '\n' || key == '\r' || key == KEY_ENTER)
+	if(config_key_matches("newline", key))
 	{
 		editor_insert_newline(b, v);
 		return 0;
@@ -477,13 +478,13 @@ int editor_handle_key(int key)
 		return 0;
 	}
 
-	if(key == CTRL_KEY(' '))
+	if(config_key_matches("force-complete", key))
 	{
 		complete_update_forced(b, v);
 		return 0;
 	}
 
-	if(key == '\t')
+	if(config_key_matches("tab", key))
 	{
 		editor_insert_char(b, v, '\t');
 		return 0;

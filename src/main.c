@@ -5,6 +5,7 @@
 
 #include "buffer.h"
 #include "common.h"
+#include "config.h"
 #include "editor.h"
 #include "input.h"
 #include "screen.h"
@@ -35,8 +36,12 @@ static void print_help(const char *prog)
 	printf("  Ctrl-P / F1                         Command palette, Esc cancels\n");
 	printf("  F2                                  File explorer, Esc cancels\n");
 	printf("  Ctrl-Z / Ctrl-Y                     Undo / redo\n");
-	printf("  Ctrl-Space                          Force completion (Tab / Enter accept)\n");
-	printf("  Mouse click / wheel                 Move cursor / scroll / switch tab\n");
+  printf("  Ctrl-Space                          Force completion (Tab / Enter accept)\n");
+  printf("  Mouse click / wheel                 Move cursor / scroll / switch tab\n");
+  printf("\n");
+  printf("Config: $XDG_CONFIG_HOME/sulf/config, else ~/.config/sulf/config\n");
+  printf("  (legacy ~/.config/sulf also works). Keys are tab_width, theme,\n");
+  printf("  color.<class>, and key.<action>; see README.\n");
 }
 
 static void print_version(void)
@@ -77,6 +82,7 @@ int main(int argc, char *argv[])
 	opened = 0;
 	first_tab = -1;
 	tabs_init();
+	config_load();
 
 	for(i = 1; i < argc; i++)
 	{
@@ -110,6 +116,12 @@ int main(int argc, char *argv[])
 	}
 
 	editor_start_screen();
+
+	if(config_notice()[0] != '\0')
+	{
+		editor_set_status(config_notice());
+	}
+
 	editor_run();
 	editor_end_screen();
 	tabs_free();

@@ -34,10 +34,40 @@ Run as `build/sulf [file ...]`. Each file opens in its own tab
 
 `--help` prints the same list, `--version` prints the version.
 
+## Config
+
+Optional file at `$XDG_CONFIG_HOME/sulf/config`, else
+`~/.config/sulf/config` (legacy `~/.config/sulf` also works).
+Missing file keeps defaults; bad lines are ignored with a warning.
+Lines are `key = value` (`#` comments, last-wins):
+
+```
+tab_width = 4            # 1..16, display tab stops + space-unindent width
+theme = default          # default | mono | high-contrast
+color.keyword = yellow   # keyword/string/comment/number/preproc:
+color.string = green     # black red green yellow blue magenta cyan
+color.comment = cyan     # white default none
+key.save = Ctrl-S        # Ctrl-<letter|Space|]|^>  F1..F12
+key.palette = Ctrl-P,F1  # Tab Enter Backspace Delete DEL
+                         # Up Down Left Right Home End PgUp PgDn
+                         # Shift-Tab Shift-Left/Right/Up/Down/Home/End/PgUp/PgDn
+```
+
+Every main keybinding is rebindable (`quit save undo redo copy cut
+paste find palette explorer next-tab prev-tab left right up down
+sel-left sel-right sel-up sel-down page-up page-down sel-page-up
+sel-page-down home end sel-home sel-end unindent backspace delete
+newline force-complete tab`). Overriding an action replaces its whole
+list; a rebinding that steals another action's default is rejected
+unless that action is rebound too (so swaps work). Printable characters
+can't be bound, so typing is never shadowed. `--help` and the status
+line always show the default keys.
+
 ## Notes
 
 - Tabs are stored as tab bytes and spaces as spaces — neither is ever
-  converted (tab stops render at every 4th column, display only).
+  converted (tab stops render every `tab_width` columns, default 4,
+  display only).
   Line endings round-trip: LF, CRLF, and mixed files keep their style on
   save (mixed normalizes to LF after saving).
 - Full UTF-8: cursor, editing, search, and display are character-aware;

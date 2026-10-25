@@ -3,6 +3,7 @@
 
 #include "buffer.h"
 #include "common.h"
+#include "config.h"
 #include "edit.h"
 #include "editor.h"
 #include "git.h"
@@ -242,7 +243,7 @@ void editor_unindent(Buffer *b, View *v)
 					pushed = 1;
 				}
 
-				stripped = editor_strip_leading(target, (size_t)TAB_WIDTH);
+				stripped = editor_strip_leading(target, (size_t)config_tab_width());
 
 				if(stripped == 0)
 				{
@@ -282,7 +283,7 @@ void editor_unindent(Buffer *b, View *v)
 			{
 				b->dirty = 1;
 				highlight_mark_dirty(b);
-	git_touch(b);
+				git_touch(b);
 				undo_end(b, v, UNDO_OTHER);
 			}
 
@@ -310,7 +311,7 @@ void editor_unindent(Buffer *b, View *v)
 		}
 
 		undo_begin(b, v, UNDO_OTHER);
-		stripped = editor_strip_leading(line, (size_t)TAB_WIDTH);
+		stripped = editor_strip_leading(line, (size_t)config_tab_width());
 
 		if(v->cx >= stripped)
 		{
