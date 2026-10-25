@@ -45,32 +45,37 @@ typedef enum
 
 typedef struct
 {
+	const char *icon;
 	const char *name;
 	PaletteAction action;
 } PaletteItem;
 
+/* Icons are display-only monochrome glyphs (never matched by the filter).
+Each must be a single cell per utf8_width_n; keep clear of the wide ranges
+in line.c (emoji, U+231A/B, U+23E9-U+23FC) and prefer Latin-1/arrows/dingbats
+with broad font coverage. */
 static const PaletteItem s_table[] =
 {
-	{ "Save", PAL_SAVE },
-	{ "Save As...", PAL_SAVE_AS },
-	{ "Quit", PAL_QUIT },
-	{ "Open File...", PAL_OPEN_FILE },
-	{ "Find...", PAL_FIND },
-	{ "Find Next", PAL_FIND_NEXT },
-	{ "Find Previous", PAL_FIND_PREV },
-	{ "Undo", PAL_UNDO },
-	{ "Redo", PAL_REDO },
-	{ "Indent Selection", PAL_INDENT },
-	{ "Delete Selection", PAL_DELETE_SELECTION },
-	{ "Unindent", PAL_UNINDENT },
-	{ "Clear Selection", PAL_CLEAR_SELECTION },
-	{ "Copy", PAL_COPY },
-	{ "Cut", PAL_CUT },
-	{ "Paste", PAL_PASTE },
-	{ "Complete Word", PAL_COMPLETE_WORD },
-	{ "Next Buffer", PAL_NEXT_BUFFER },
-	{ "Previous Buffer", PAL_PREV_BUFFER },
-	{ "Close Buffer", PAL_CLOSE_BUFFER }
+	{ "\xE2\x9C\x93", "Save", PAL_SAVE },
+	{ "\xE2\x9C\x8E", "Save As...", PAL_SAVE_AS },
+	{ "\xC3\x97", "Quit", PAL_QUIT },
+	{ "\xE2\x98\xB0", "Open File...", PAL_OPEN_FILE },
+	{ "\xE2\x8C\x95", "Find...", PAL_FIND },
+	{ "\xE2\x86\xAA", "Find Next", PAL_FIND_NEXT },
+	{ "\xE2\x86\xA9", "Find Previous", PAL_FIND_PREV },
+	{ "\xE2\x86\xBA", "Undo", PAL_UNDO },
+	{ "\xE2\x86\xBB", "Redo", PAL_REDO },
+	{ "\xC2\xBB", "Indent Selection", PAL_INDENT },
+	{ "\xE2\x88\x92", "Delete Selection", PAL_DELETE_SELECTION },
+	{ "\xC2\xAB", "Unindent", PAL_UNINDENT },
+	{ "\xE2\x97\x8B", "Clear Selection", PAL_CLEAR_SELECTION },
+	{ "+", "Copy", PAL_COPY },
+	{ "\xE2\x9C\x82", "Cut", PAL_CUT },
+	{ "\xE2\x96\xBC", "Paste", PAL_PASTE },
+	{ "\xE2\x80\xA6", "Complete Word", PAL_COMPLETE_WORD },
+	{ "\xE2\x86\x92", "Next Buffer", PAL_NEXT_BUFFER },
+	{ "\xE2\x86\x90", "Previous Buffer", PAL_PREV_BUFFER },
+	{ "\xE2\x9C\x95", "Close Buffer", PAL_CLOSE_BUFFER }
 };
 
 #define PALETTE_TABLE_COUNT ((int)(sizeof(s_table) / sizeof(s_table[0])))
@@ -615,6 +620,37 @@ int palette_query_cursor_y(void)
 	return y + 1;
 }
 
+static void palette_draw_entry(int row, int col, int content, const PaletteItem *item)
+{
+	int icon_cells;
+	size_t name_bytes;
+
+	if(item == NULL)
+	{
+		return;
+	}
+
+	if(content < 4)
+	{
+		mvaddnstr(row, col, item->name, content);
+		return;
+	}
+
+	icon_cells = utf8_width_n(item->icon, strlen(item->icon));
+
+	if(icon_cells < 1 || icon_cells + 1 >= content)
+	{
+		mvaddnstr(row, col, item->name, content);
+		return;
+	}
+
+	mvaddstr(row, col, item->icon);
+	mvaddch(row, col + icon_cells, ' ');
+	name_bytes = utf8_fit_cells(item->name, strlen(item->name),
+		content - icon_cells - 1);
+	mvaddnstr(row, col + icon_cells + 1, item->name, (int)name_bytes);
+}
+
 void palette_draw(void)
 {
 	int visible;
@@ -695,7 +731,8 @@ void palette_draw(void)
 			attron(A_REVERSE);
 		}
 
-		mvaddnstr(row, x + 1, s_table[s_palette.filtered[s_palette.scroll + i]].name, content);
+		palette_draw_entry(row, x + 1, content,
+			&s_table[s_palette.filtered[s_palette.scroll + i]]);
 
 		if(selected)
 		{
