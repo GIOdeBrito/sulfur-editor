@@ -24,11 +24,10 @@ Ideas only — never implement unasked.
 ## Quality of life
 - Word wrap toggle (soft wrap, no buffer change)
 - Periodic backup file (`.#name` + restore prompt)
-- Split view: multiple panes per tab, one buffer per pane (tabs done)
-- Config file (`~/.config/sulf`: keys, theme, `TAB_WIDTH`)
+- Split view: multiple panes per tab, one buffer per pane (tabs done, panes open)
 
 ## Platform / IDE growth
-- 256-color / truecolor palette detection, theme option
+- 256-color / truecolor palette detection
 - Clipboard integration: OSC-52 yank, bracketed paste
 - Wider highlight coverage: `.py`, `.js`, `.sh` keyword sets
 - Man page (README covers 1.0 docs)
