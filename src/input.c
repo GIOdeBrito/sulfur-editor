@@ -202,6 +202,13 @@ int editor_handle_key(int key)
 
 	if(explorer_is_active())
 	{
+		if(config_key_matches("explorer", key))
+		{
+			explorer_reset();
+			editor_set_status("Explorer cancelled");
+			return 0;
+		}
+
 		if(key == KEY_MOUSE)
 		{
 			explorer_reset();

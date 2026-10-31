@@ -39,7 +39,6 @@ typedef struct
 	int count;
 	int selected;
 	int scroll;
-	int show_hidden;
 	int truncated;
 } Explorer;
 
@@ -197,6 +196,12 @@ static void explorer_preview_load(void)
 	int is_dir;
 	FILE *fp;
 	struct stat st;
+
+	if(explorer_preview_enabled() == 0)
+	{
+		explorer_preview_invalidate();
+		return;
+	}
 
 	if(s_explorer.active == 0)
 	{
@@ -391,7 +396,7 @@ static void explorer_refilter(void)
 		s_explorer.count++;
 	}
 
-	explorer_preview_load();
+	explorer_preview_invalidate();
 }
 
 static void explorer_sort(void)
@@ -518,11 +523,6 @@ static void explorer_rescan(void)
 		struct stat st;
 
 		if(strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0)
-		{
-			continue;
-		}
-
-		if(s_explorer.show_hidden == 0 && ent->d_name[0] == '.')
 		{
 			continue;
 		}
@@ -741,7 +741,7 @@ static void explorer_move(int delta)
 		s_explorer.scroll = s_explorer.selected - visible + 1;
 	}
 
-	explorer_preview_load();
+	explorer_preview_invalidate();
 }
 
 void explorer_open(const char *start_dir)
@@ -852,13 +852,6 @@ int explorer_handle_key(int key)
 
 	if(s_explorer.active == 0)
 	{
-		return 0;
-	}
-
-	if(key == KEY_F(2))
-	{
-		s_explorer.show_hidden = s_explorer.show_hidden == 0;
-		explorer_rescan();
 		return 0;
 	}
 
@@ -1083,6 +1076,11 @@ void explorer_draw(void)
 	if(LINES < 5 || COLS < 10)
 	{
 		return;
+	}
+
+	if(s_preview.valid == 0)
+	{
+		explorer_preview_load();
 	}
 
 	visible = explorer_visible_rows();
