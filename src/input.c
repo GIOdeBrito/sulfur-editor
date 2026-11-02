@@ -536,6 +536,30 @@ void editor_run(void)
 			git_refresh(b);
 		}
 
+		if(explorer_is_active())
+		{
+			erase();
+			explorer_draw();
+
+			if(explorer_cursor_y() >= 0 && explorer_cursor_y() < LINES &&
+				explorer_cursor_x() >= 0 && explorer_cursor_x() < COLS)
+			{
+				move(explorer_cursor_y(), explorer_cursor_x());
+			}
+
+			curs_set(1);
+			refresh();
+			key = getch();
+
+			if(key == ERR)
+			{
+				continue;
+			}
+
+			done = editor_handle_key(key);
+			continue;
+		}
+
 		editor_clamp_cursor(b, v);
 		editor_scroll(b, v);
 		erase();
@@ -545,8 +569,6 @@ void editor_run(void)
 		complete_draw(b, v);
 		palette_dim_background();
 		palette_draw();
-		explorer_dim_background();
-		explorer_draw();
 		text_off = editor_text_offset(b);
 		cursor_line = editor_current_line(b, v);
 
@@ -571,14 +593,6 @@ void editor_run(void)
 				palette_query_cursor_x() >= 0 && palette_query_cursor_x() < COLS)
 			{
 				move(palette_query_cursor_y(), palette_query_cursor_x());
-			}
-		}
-		else if(explorer_is_active())
-		{
-			if(explorer_cursor_y() >= 0 && explorer_cursor_y() < LINES &&
-				explorer_cursor_x() >= 0 && explorer_cursor_x() < COLS)
-			{
-				move(explorer_cursor_y(), explorer_cursor_x());
 			}
 		}
 		else

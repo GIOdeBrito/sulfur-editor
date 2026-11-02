@@ -17,15 +17,15 @@
 
 #define EXPLORER_MAX_QUERY 64
 #define EXPLORER_MAX_ENTRIES 256
-#define EXPLORER_MAX_VISIBLE 14
-#define EXPLORER_MODAL_CONTENT 40
+#define EXPLORER_LIST_WIDTH 40
 #define EXPLORER_NAME_LIMIT 256
 #define EXPLORER_PREVIEW_LINES 64
 #define EXPLORER_PREVIEW_WIDTH 256
 #define EXPLORER_PREVIEW_MIN 20
-#define EXPLORER_PREVIEW_MAX 40
-#define EXPLORER_PREVIEW_GATE 100
 #define EXPLORER_PREVIEW_MAX_BYTES (128 * 1024)
+#define EXPLORER_TITLE_ROW 0
+#define EXPLORER_QUERY_ROW 1
+#define EXPLORER_LIST_TOP 2
 
 typedef struct
 {
@@ -89,53 +89,55 @@ static int explorer_fuzzy_match(const char *query, const char *name)
 	return 1;
 }
 
-static int explorer_preview_enabled(void)
+static int explorer_tree_width(void)
 {
-	if(COLS < EXPLORER_PREVIEW_GATE)
+	if(COLS < EXPLORER_LIST_WIDTH)
 	{
-		return 0;
+		return COLS;
 	}
 
-	if(COLS - 4 < EXPLORER_MODAL_CONTENT + 1 + EXPLORER_PREVIEW_MIN)
-	{
-		return 0;
-	}
-
-	return 1;
+	return EXPLORER_LIST_WIDTH;
 }
 
 static int explorer_preview_width(void)
 {
+	int tree_w;
 	int avail;
 
-	if(explorer_preview_enabled() == 0)
+	tree_w = explorer_tree_width();
+
+	if(tree_w >= COLS)
 	{
 		return 0;
 	}
 
-	avail = COLS - 4 - EXPLORER_MODAL_CONTENT - 1;
+	avail = COLS - tree_w - 1;
 
 	if(avail < EXPLORER_PREVIEW_MIN)
 	{
-		avail = EXPLORER_PREVIEW_MIN;
-	}
-
-	if(avail > EXPLORER_PREVIEW_MAX)
-	{
-		avail = EXPLORER_PREVIEW_MAX;
-	}
-
-	if(EXPLORER_MODAL_CONTENT + 1 + avail > COLS - 4)
-	{
-		avail = COLS - 4 - EXPLORER_MODAL_CONTENT - 1;
-	}
-
-	if(avail < 0)
-	{
-		avail = 0;
+		return 0;
 	}
 
 	return avail;
+}
+
+static int explorer_preview_enabled(void)
+{
+	return explorer_preview_width() > 0;
+}
+
+static int explorer_visible_rows(void)
+{
+	int visible;
+
+	visible = LINES - EXPLORER_LIST_TOP;
+
+	if(visible < 1)
+	{
+		visible = 1;
+	}
+
+	return visible;
 }
 
 static void explorer_preview_invalidate(void)
@@ -724,11 +726,11 @@ static void explorer_move(int delta)
 		s_explorer.selected = 0;
 	}
 
-	visible = s_explorer.count;
+	visible = explorer_visible_rows();
 
-	if(visible > EXPLORER_MAX_VISIBLE)
+	if(visible > s_explorer.count)
 	{
-		visible = EXPLORER_MAX_VISIBLE;
+		visible = s_explorer.count;
 	}
 
 	if(s_explorer.selected < s_explorer.scroll)
@@ -924,156 +926,40 @@ int explorer_handle_key(int key)
 	return 0;
 }
 
-static void explorer_box(int *x, int *y, int *w, int *h, int visible)
-{
-	int content;
-	int preview;
-
-	if(x == NULL || y == NULL || w == NULL || h == NULL)
-	{
-		return;
-	}
-
-	content = EXPLORER_MODAL_CONTENT;
-
-	if(content > COLS - 4)
-	{
-		content = COLS - 4;
-	}
-
-	if(content < 1)
-	{
-		content = 1;
-	}
-
-	preview = explorer_preview_width();
-
-	if(preview > 0)
-	{
-		content += 1 + preview;
-	}
-
-	*w = content + 2;
-	*x = (COLS - *w) / 2;
-
-	if(*x < 0)
-	{
-		*x = 0;
-	}
-
-	*y = 1;
-	*h = visible + 3;
-}
-
-static int explorer_visible_rows(void)
-{
-	int visible;
-	int y;
-
-	visible = EXPLORER_MAX_VISIBLE;
-	y = 1;
-
-	while(visible > 0 && y + visible + 3 > LINES - 2)
-	{
-		visible--;
-	}
-
-	return visible;
-}
-
-void explorer_dim_background(void)
-{
-	int visible;
-	int x;
-	int y;
-	int w;
-	int h;
-	int row;
-	int col;
-
-	if(s_explorer.active == 0)
-	{
-		return;
-	}
-
-	if(LINES < 5 || COLS < 10)
-	{
-		return;
-	}
-
-	visible = explorer_visible_rows();
-	explorer_box(&x, &y, &w, &h, visible);
-
-	for(row = 0; row < LINES; row++)
-	{
-		for(col = 0; col < COLS; col++)
-		{
-			chtype cell;
-
-			if(col >= x && col < x + w && row >= y && row < y + h)
-			{
-				continue;
-			}
-
-			cell = mvwinch(stdscr, row, col);
-
-			if((cell & A_DIM) == 0)
-			{
-				mvaddch(row, col, cell | A_DIM);
-			}
-		}
-	}
-}
-
 int explorer_cursor_x(void)
 {
-	int x;
-	int y;
-	int w;
-	int h;
 	int len;
 
-	explorer_box(&x, &y, &w, &h, 0);
 	len = utf8_width_n(s_explorer.query, strlen(s_explorer.query));
 
-	if(len > w - 4)
+	if(len > COLS - 3)
 	{
-		len = w - 4;
+		len = COLS - 3;
 	}
 
-	return x + 3 + len;
+	return 2 + len;
 }
 
 int explorer_cursor_y(void)
 {
-	int x;
-	int y;
-	int w;
-	int h;
-
-	explorer_box(&x, &y, &w, &h, 0);
-	return y + 1;
+	return EXPLORER_QUERY_ROW;
 }
 
 void explorer_draw(void)
 {
 	int visible;
-	int x;
-	int y;
-	int w;
-	int h;
-	int content;
 	int tree_w;
 	int preview_w;
 	int qlen;
 	int i;
+	char title[STATUS_LIMIT];
 
 	if(s_explorer.active == 0)
 	{
 		return;
 	}
 
-	if(LINES < 5 || COLS < 10)
+	if(LINES < 3 || COLS < 10)
 	{
 		return;
 	}
@@ -1084,83 +970,44 @@ void explorer_draw(void)
 	}
 
 	visible = explorer_visible_rows();
-	explorer_box(&x, &y, &w, &h, visible);
-	content = w - 2;
-	tree_w = EXPLORER_MODAL_CONTENT;
-
-	if(tree_w > COLS - 4)
-	{
-		tree_w = COLS - 4;
-	}
-
-	if(tree_w < 1)
-	{
-		tree_w = 1;
-	}
-
+	tree_w = explorer_tree_width();
 	preview_w = explorer_preview_width();
 
-	if(tree_w + 1 + preview_w != content)
-	{
-		preview_w = 0;
-	}
+	move(EXPLORER_TITLE_ROW, 0);
+	clrtoeol();
+	snprintf(title, sizeof(title), "Explorer: %.200s", s_explorer.cwd);
+	attron(A_BOLD);
+	mvaddnstr(EXPLORER_TITLE_ROW, 0, title,
+		(int)utf8_fit_cells(title, strlen(title), COLS));
+	attroff(A_BOLD);
 
-	mvaddch(y, x, ACS_ULCORNER);
-
-	for(i = 1; i <= content; i++)
-	{
-		if(preview_w > 0 && i == tree_w + 1)
-		{
-			mvaddch(y, x + i, ACS_TTEE);
-		}
-		else
-		{
-			mvaddch(y, x + i, ACS_HLINE);
-		}
-	}
-
-	mvaddch(y, x + content + 1, ACS_URCORNER);
-
-	if(tree_w >= 17)
-	{
-		attron(A_BOLD);
-		mvaddnstr(y, x + 1 + (tree_w - 15) / 2, " File Explorer ", 15);
-		attroff(A_BOLD);
-	}
-
-	mvaddch(y + 1, x, ACS_VLINE);
-
-	for(i = 0; i < content; i++)
-	{
-		mvaddch(y + 1, x + 1 + i, ' ');
-	}
-
-	mvaddch(y + 1, x + content + 1, ACS_VLINE);
-	mvaddnstr(y + 1, x + 1, "> ", content);
-	qlen = (int)utf8_fit_cells(s_explorer.query, strlen(s_explorer.query), content - 2);
-	mvaddnstr(y + 1, x + 3, s_explorer.query, qlen);
+	move(EXPLORER_QUERY_ROW, 0);
+	clrtoeol();
+	mvaddnstr(EXPLORER_QUERY_ROW, 0, "> ", 2);
+	qlen = (int)utf8_fit_cells(s_explorer.query, strlen(s_explorer.query), COLS - 2);
+	mvaddnstr(EXPLORER_QUERY_ROW, 2, s_explorer.query, qlen);
 
 	for(i = 0; i < visible; i++)
 	{
 		int row;
 		int has_entry;
-		int j;
 
-		row = y + 2 + i;
-		mvaddch(row, x, ACS_VLINE);
+		row = EXPLORER_LIST_TOP + i;
 
-		for(j = 0; j < content; j++)
+		if(row >= LINES)
 		{
-			mvaddch(row, x + 1 + j, ' ');
+			break;
 		}
 
-		mvaddch(row, x + content + 1, ACS_VLINE);
+		move(row, 0);
+		clrtoeol();
 		has_entry = (s_explorer.scroll + i < s_explorer.count);
 
 		if(has_entry != 0)
 		{
 			int selected;
 			int idx;
+			int width;
 
 			selected = (s_explorer.scroll + i == s_explorer.selected);
 
@@ -1170,7 +1017,19 @@ void explorer_draw(void)
 			}
 
 			idx = s_explorer.filtered[s_explorer.scroll + i];
-			mvaddnstr(row, x + 1, s_explorer.names[idx], tree_w);
+
+			if(preview_w > 0)
+			{
+				width = tree_w;
+			}
+			else
+			{
+				width = COLS;
+			}
+
+			mvaddnstr(row, 0, s_explorer.names[idx],
+				(int)utf8_fit_cells(s_explorer.names[idx],
+				strlen(s_explorer.names[idx]), width));
 
 			if(selected != 0)
 			{
@@ -1182,40 +1041,24 @@ void explorer_draw(void)
 		{
 			int plen;
 
-			mvaddch(row, x + 1 + tree_w, ACS_VLINE);
+			mvaddch(row, tree_w, ACS_VLINE);
 
 			if(s_preview.valid != 0 && i < s_preview.nlines)
 			{
 				if(s_preview.truncated != 0 && i == visible - 1)
 				{
-					mvaddnstr(row, x + 1 + tree_w + 1, "[...]", preview_w);
+					mvaddnstr(row, tree_w + 1, "[...]", preview_w);
 				}
 				else
 				{
 					plen = (int)utf8_fit_cells(s_preview.text[i], strlen(s_preview.text[i]), preview_w);
-					mvaddnstr(row, x + 1 + tree_w + 1, s_preview.text[i], plen);
+					mvaddnstr(row, tree_w + 1, s_preview.text[i], plen);
 				}
 			}
 			else if(s_preview.valid != 0 && s_preview.truncated != 0 && i == visible - 1)
 			{
-				mvaddnstr(row, x + 1 + tree_w + 1, "[...]", preview_w);
+				mvaddnstr(row, tree_w + 1, "[...]", preview_w);
 			}
 		}
 	}
-
-	mvaddch(y + visible + 2, x, ACS_LLCORNER);
-
-	for(i = 1; i <= content; i++)
-	{
-		if(preview_w > 0 && i == tree_w + 1)
-		{
-			mvaddch(y + visible + 2, x + i, ACS_BTEE);
-		}
-		else
-		{
-			mvaddch(y + visible + 2, x + i, ACS_HLINE);
-		}
-	}
-
-	mvaddch(y + visible + 2, x + content + 1, ACS_LRCORNER);
 }
