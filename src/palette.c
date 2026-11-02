@@ -1,4 +1,5 @@
 #include <ncurses.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "buffer.h"
@@ -45,37 +46,35 @@ typedef enum
 
 typedef struct
 {
-	const char *icon;
+	const char *cmd;
 	const char *name;
 	PaletteAction action;
 } PaletteItem;
 
-/* Icons are display-only monochrome glyphs (never matched by the filter).
-Each must be a single cell per utf8_width_n; keep clear of the wide ranges
-in line.c (emoji, U+231A/B, U+23E9-U+23FC) and prefer Latin-1/arrows/dingbats
-with broad font coverage. */
+/* Slash commands are shown in every row (`/cmd` + description) and are
+matched by the filter alongside the human-readable name. */
 static const PaletteItem s_table[] =
 {
-	{ "\xE2\x9C\x93", "Save", PAL_SAVE },
-	{ "\xE2\x9C\x8E", "Save As...", PAL_SAVE_AS },
-	{ "\xC3\x97", "Quit", PAL_QUIT },
-	{ "\xE2\x98\xB0", "Open File...", PAL_OPEN_FILE },
-	{ "\xE2\x8C\x95", "Find...", PAL_FIND },
-	{ "\xE2\x86\xAA", "Find Next", PAL_FIND_NEXT },
-	{ "\xE2\x86\xA9", "Find Previous", PAL_FIND_PREV },
-	{ "\xE2\x86\xBA", "Undo", PAL_UNDO },
-	{ "\xE2\x86\xBB", "Redo", PAL_REDO },
-	{ "\xC2\xBB", "Indent Selection", PAL_INDENT },
-	{ "\xE2\x88\x92", "Delete Selection", PAL_DELETE_SELECTION },
-	{ "\xC2\xAB", "Unindent", PAL_UNINDENT },
-	{ "\xE2\x97\x8B", "Clear Selection", PAL_CLEAR_SELECTION },
-	{ "+", "Copy", PAL_COPY },
-	{ "\xE2\x9C\x82", "Cut", PAL_CUT },
-	{ "\xE2\x96\xBC", "Paste", PAL_PASTE },
-	{ "\xE2\x80\xA6", "Complete Word", PAL_COMPLETE_WORD },
-	{ "\xE2\x86\x92", "Next Buffer", PAL_NEXT_BUFFER },
-	{ "\xE2\x86\x90", "Previous Buffer", PAL_PREV_BUFFER },
-	{ "\xE2\x9C\x95", "Close Buffer", PAL_CLOSE_BUFFER }
+	{ "/save", "Save", PAL_SAVE },
+	{ "/save-as", "Save As...", PAL_SAVE_AS },
+	{ "/quit", "Quit", PAL_QUIT },
+	{ "/open-file", "Open File...", PAL_OPEN_FILE },
+	{ "/find", "Find...", PAL_FIND },
+	{ "/find-next", "Find Next", PAL_FIND_NEXT },
+	{ "/find-previous", "Find Previous", PAL_FIND_PREV },
+	{ "/undo", "Undo", PAL_UNDO },
+	{ "/redo", "Redo", PAL_REDO },
+	{ "/indent", "Indent Selection", PAL_INDENT },
+	{ "/delete-selection", "Delete Selection", PAL_DELETE_SELECTION },
+	{ "/unindent", "Unindent", PAL_UNINDENT },
+	{ "/clear-selection", "Clear Selection", PAL_CLEAR_SELECTION },
+	{ "/copy", "Copy", PAL_COPY },
+	{ "/cut", "Cut", PAL_CUT },
+	{ "/paste", "Paste", PAL_PASTE },
+	{ "/complete-word", "Complete Word", PAL_COMPLETE_WORD },
+	{ "/next-buffer", "Next Buffer", PAL_NEXT_BUFFER },
+	{ "/previous-buffer", "Previous Buffer", PAL_PREV_BUFFER },
+	{ "/close-buffer", "Close Buffer", PAL_CLOSE_BUFFER }
 };
 
 #define PALETTE_TABLE_COUNT ((int)(sizeof(s_table) / sizeof(s_table[0])))
@@ -143,7 +142,8 @@ static void palette_refilter(void)
 			return;
 		}
 
-		if(palette_fuzzy_match(s_palette.query, s_table[i].name) == 0)
+		if(palette_fuzzy_match(s_palette.query, s_table[i].name) == 0 &&
+			palette_fuzzy_match(s_palette.query, s_table[i].cmd) == 0)
 		{
 			continue;
 		}
@@ -622,33 +622,28 @@ int palette_query_cursor_y(void)
 
 static void palette_draw_entry(int row, int col, int content, const PaletteItem *item)
 {
-	int icon_cells;
-	size_t name_bytes;
+	char text[128];
+	int len;
 
 	if(item == NULL)
 	{
 		return;
 	}
 
-	if(content < 4)
+	if(content < 1)
 	{
-		mvaddnstr(row, col, item->name, content);
 		return;
 	}
 
-	icon_cells = utf8_width_n(item->icon, strlen(item->icon));
+	len = snprintf(text, sizeof(text), "%s - %s", item->cmd, item->name);
 
-	if(icon_cells < 1 || icon_cells + 1 >= content)
+	if(len < 0)
 	{
-		mvaddnstr(row, col, item->name, content);
 		return;
 	}
 
-	mvaddstr(row, col, item->icon);
-	mvaddch(row, col + icon_cells, ' ');
-	name_bytes = utf8_fit_cells(item->name, strlen(item->name),
-		content - icon_cells - 1);
-	mvaddnstr(row, col + icon_cells + 1, item->name, (int)name_bytes);
+	mvaddnstr(row, col, text,
+		(int)utf8_fit_cells(text, strlen(text), content));
 }
 
 void palette_draw(void)
