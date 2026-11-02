@@ -74,9 +74,10 @@ static const ConfigDefault s_defaults[] =
 };
 
 static int s_tab_width = CONFIG_DEFAULT_TAB_WIDTH;
-static int s_fg[CONFIG_HL_COUNT] = { 3, 2, 6, 5, 1 };
+static int s_fg[CONFIG_HL_COUNT] = { 156, 108, 243, 223, 149 };
 static int s_fg_set[CONFIG_HL_COUNT] = { 0, 0, 0, 0, 0 };
 static int s_mono = 0;
+static int s_acid = 1;
 static char s_notice[128] = { 0 };
 static ConfigEntry s_resolved[CONFIG_MAX_ACTIONS];
 static int s_resolved_count = 0;
@@ -174,7 +175,8 @@ static int config_class_index(const char *name)
 	return -1;
 }
 
-/* Named ncurses colors 0..7, -1 for default/transparent. */
+/* Named ncurses colors 0..7, 256-palette 0..255 by number,
+-1 for default/transparent. */
 static int config_parse_color(const char *name, int *out)
 {
 	if(name == NULL || out == NULL)
@@ -234,6 +236,19 @@ static int config_parse_color(const char *name, int *out)
 	{
 		*out = -1;
 		return 0;
+	}
+
+	{
+		char *end;
+		long v;
+
+		v = strtol(name, &end, 10);
+
+		if(end != name && *end == '\0' && v >= 0 && v <= 255)
+		{
+			*out = (int)v;
+			return 0;
+		}
 	}
 
 	return -1;
@@ -628,6 +643,7 @@ static void config_apply_preset(const char *name)
 {
 	static const int def[CONFIG_HL_COUNT] = { 3, 2, 6, 5, 1 };
 	static const int hi[CONFIG_HL_COUNT] = { 7, 3, 7, 6, 5 };
+	static const int acid[CONFIG_HL_COUNT] = { 156, 108, 243, 223, 149 };
 	int i;
 
 	if(name == NULL)
@@ -638,6 +654,7 @@ static void config_apply_preset(const char *name)
 	if(strcmp(name, "mono") == 0)
 	{
 		s_mono = 1;
+		s_acid = 0;
 
 		for(i = 0; i < CONFIG_HL_COUNT; i++)
 		{
@@ -649,12 +666,26 @@ static void config_apply_preset(const char *name)
 	}
 
 	s_mono = 0;
+	s_acid = 0;
 
 	if(strcmp(name, "high-contrast") == 0)
 	{
 		for(i = 0; i < CONFIG_HL_COUNT; i++)
 		{
 			s_fg[i] = hi[i];
+			s_fg_set[i] = 0;
+		}
+
+		return;
+	}
+
+	if(strcmp(name, "acid") == 0)
+	{
+		s_acid = 1;
+
+		for(i = 0; i < CONFIG_HL_COUNT; i++)
+		{
+			s_fg[i] = acid[i];
 			s_fg_set[i] = 0;
 		}
 
@@ -1028,6 +1059,11 @@ int config_highlight_mono(void)
 	}
 
 	return 1;
+}
+
+int config_highlight_acid(void)
+{
+	return s_acid;
 }
 
 const char *config_notice(void)

@@ -43,10 +43,11 @@ Lines are `key = value` (`#` comments, last-wins):
 
 ```
 tab_width = 4            # 1..16, display tab stops + space-unindent width
-theme = default          # default | mono | high-contrast
+theme = acid             # default | acid | mono | high-contrast
 color.keyword = yellow   # keyword/string/comment/number/preproc:
 color.string = green     # black red green yellow blue magenta cyan
-color.comment = cyan     # white default none
+color.comment = cyan     # white default none, or a 0-255 palette
+                         # index when the terminal supports 256 colors
 key.save = Ctrl-S        # Ctrl-<letter|Space|]|^>  F1..F12
 key.palette = Ctrl-P,F1  # Tab Enter Backspace Delete DEL
                          # Up Down Left Right Home End PgUp PgDn

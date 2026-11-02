@@ -726,8 +726,25 @@ void highlight_free(Buffer *b)
 	b->hl.dirty = 0;
 }
 
+/* Fit a configured fg (0..255, -1 default) to this terminal.
+Values the terminal cannot show fall back to a calm 8-color choice
+so the acid theme degrades gracefully on 8-color terminals. */
+static int hl_fit_fg(int fg, int fallback)
+{
+	if(fg < 0 || fg >= COLORS)
+	{
+		return fallback;
+	}
+
+	return fg;
+}
+
 void highlight_init_color(void)
 {
+	static const int def_fb[5] = { COLOR_YELLOW, COLOR_GREEN, COLOR_CYAN, COLOR_MAGENTA, COLOR_RED };
+	static const int acid_fb[5] = { COLOR_GREEN, COLOR_GREEN, -1, COLOR_CYAN, COLOR_YELLOW };
+	const int *fb;
+	int acid;
 	int fg;
 
 	s_color = 0;
@@ -749,16 +766,19 @@ void highlight_init_color(void)
 		return;
 	}
 
+	acid = config_highlight_acid();
+	fb = acid != 0 ? acid_fb : def_fb;
+
 	fg = config_highlight_fg(CONFIG_HL_KEYWORD);
-	init_pair(HL_PAIR_KEYWORD, fg < 0 ? COLOR_YELLOW : fg, -1);
+	init_pair(HL_PAIR_KEYWORD, hl_fit_fg(fg, fb[0]), -1);
 	fg = config_highlight_fg(CONFIG_HL_STRING);
-	init_pair(HL_PAIR_STRING, fg < 0 ? COLOR_GREEN : fg, -1);
+	init_pair(HL_PAIR_STRING, hl_fit_fg(fg, fb[1]), -1);
 	fg = config_highlight_fg(CONFIG_HL_COMMENT);
-	init_pair(HL_PAIR_COMMENT, fg < 0 ? COLOR_CYAN : fg, -1);
+	init_pair(HL_PAIR_COMMENT, hl_fit_fg(fg, fb[2]), -1);
 	fg = config_highlight_fg(CONFIG_HL_NUMBER);
-	init_pair(HL_PAIR_NUMBER, fg < 0 ? COLOR_MAGENTA : fg, -1);
+	init_pair(HL_PAIR_NUMBER, hl_fit_fg(fg, fb[3]), -1);
 	fg = config_highlight_fg(CONFIG_HL_PREPROC);
-	init_pair(HL_PAIR_PREPROC, fg < 0 ? COLOR_RED : fg, -1);
+	init_pair(HL_PAIR_PREPROC, hl_fit_fg(fg, fb[4]), -1);
 	s_color = 1;
 }
 
@@ -771,6 +791,11 @@ int highlight_attr(HlClass cls)
 {
 	if(cls == HL_KEYWORD)
 	{
+		if(config_highlight_acid() != 0)
+		{
+			return COLOR_PAIR(HL_PAIR_KEYWORD);
+		}
+
 		return COLOR_PAIR(HL_PAIR_KEYWORD) | A_BOLD;
 	}
 

@@ -21,8 +21,10 @@ void config_load(void);
 int config_tab_width(void);
 /* Non-zero when key is bound to action (full input.c table). */
 int config_key_matches(const char *action, int key);
-/* Foreground for a highlight class: 0..7 ncurses color, -1 default. */
+/* Foreground for a highlight class: 0..255 ncurses color, -1 default. */
 int config_highlight_fg(int cls);
+/* Non-zero when the active theme is the softer-dark green-acid one. */
+int config_highlight_acid(void);
 /* Non-zero when theme "mono" left every class unset (plain text). */
 int config_highlight_mono(void);
 /* Short warning about ignored lines, or "" when nothing to report. */
