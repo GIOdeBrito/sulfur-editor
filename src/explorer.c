@@ -9,6 +9,7 @@
 #include "complete.h"
 #include "editor.h"
 #include "explorer.h"
+#include "highlight.h"
 #include "input.h"
 #include "line.h"
 #include "palette.h"
@@ -1186,11 +1187,99 @@ int explorer_cursor_y(void)
 	return EXPLORER_QUERY_ROW;
 }
 
+/* Non-zero when the visible row at filtered position pos is the last
+child of its parent: scanning forward, a same-depth row means a later
+sibling, a shallower row (or end of list) means the subtree ended.
+Deeper rows are descendants and are skipped. Positions outside the
+list count as last. */
+static int explorer_is_last_visible(int pos)
+{
+	int d;
+	int j;
+
+	if(pos < 0 || pos >= s_explorer.count)
+	{
+		return 1;
+	}
+
+	d = s_explorer.depth[s_explorer.filtered[pos]];
+
+	for(j = pos + 1; j < s_explorer.count; j++)
+	{
+		int dj;
+
+		dj = s_explorer.depth[s_explorer.filtered[j]];
+
+		if(dj == d)
+		{
+			return 0;
+		}
+
+		if(dj < d)
+		{
+			return 1;
+		}
+	}
+
+	return 1;
+}
+
+/* Theme-class color for a tree row: parent in string green, dirs in
+comment cyan, docs in keyword yellow, makefiles in string green, the
+rest plain. Degrades to A_NORMAL on mono/colorless terminals via
+highlight_attr(). */
+static int explorer_name_attr(int row)
+{
+	static const char *docs[] =
+	{
+		"README", "LICENSE", "LICENCE", "CHANGELOG", "CHANGES",
+		"TODO", "NOTICE", "AUTHORS", "COPYING", "AGENTS"
+	};
+	const char *name;
+	size_t len;
+	size_t i;
+
+	if(explorer_is_parent_row(row))
+	{
+		return highlight_attr(HL_STRING);
+	}
+
+	if(s_explorer.is_dir[row] != 0)
+	{
+		return highlight_attr(HL_COMMENT);
+	}
+
+	name = s_explorer.names[row];
+	len = strlen(name);
+
+	if(len > 3 && strcmp(&name[len - 3], ".md") == 0)
+	{
+		return highlight_attr(HL_KEYWORD);
+	}
+
+	for(i = 0; i < sizeof(docs) / sizeof(docs[0]); i++)
+	{
+		if(strcmp(name, docs[i]) == 0)
+		{
+			return highlight_attr(HL_KEYWORD);
+		}
+	}
+
+	if(strcmp(name, "Makefile") == 0 || strcmp(name, "makefile") == 0 ||
+		strcmp(name, "GNUmakefile") == 0)
+	{
+		return highlight_attr(HL_STRING);
+	}
+
+	return highlight_attr(HL_NORMAL);
+}
+
 void explorer_draw(void)
 {
 	int visible;
 	int tree_w;
 	int preview_w;
+	int tree_art;
 	int qlen;
 	int i;
 	char title[STATUS_LIMIT];
@@ -1213,6 +1302,7 @@ void explorer_draw(void)
 	visible = explorer_visible_rows();
 	tree_w = explorer_tree_width();
 	preview_w = explorer_preview_width();
+	tree_art = (s_explorer.query[0] == '\0');
 
 	move(EXPLORER_TITLE_ROW, 0);
 	clrtoeol();
@@ -1247,17 +1337,19 @@ void explorer_draw(void)
 		if(has_entry != 0)
 		{
 			int selected;
+			int vpos;
 			int idx;
 			int width;
+			char prefix[96];
+			int plen;
+			int nattr;
+			int col;
+			int nbytes;
 
-			selected = (s_explorer.scroll + i == s_explorer.selected);
+			vpos = s_explorer.scroll + i;
+			selected = (vpos == s_explorer.selected);
 
-			if(selected != 0)
-			{
-				attron(A_REVERSE);
-			}
-
-			idx = s_explorer.filtered[s_explorer.scroll + i];
+			idx = s_explorer.filtered[vpos];
 
 			if(preview_w > 0)
 			{
@@ -1268,52 +1360,129 @@ void explorer_draw(void)
 				width = COLS;
 			}
 
+			plen = 0;
+			prefix[0] = '\0';
+
+			if(tree_art != 0 && explorer_is_parent_row(idx) == 0 &&
+				s_explorer.depth[idx] > 0)
 			{
-				char text[EXPLORER_NAME_LIMIT + 64];
-				int indent;
-				int room;
-				int pos;
-				int nbytes;
+				int start;
+				int level;
 
-				indent = s_explorer.depth[idx] * 2;
-				room = width - 2;
+				start = s_explorer.depth[idx] - 32;
 
-				if(room < 1)
+				if(start < 0)
 				{
-					room = 1;
+					start = 0;
 				}
 
-				if(indent > room - 1)
+				for(level = start; level < s_explorer.depth[idx]; level++)
 				{
-					indent = room - 1;
+					int q;
+					int ancestor;
+					int bar;
+
+					ancestor = -1;
+					bar = 0;
+
+					for(q = vpos - 1; q >= 0; q--)
+					{
+						int dq;
+
+						dq = s_explorer.depth[s_explorer.filtered[q]];
+
+						if(dq == level)
+						{
+							ancestor = q;
+							break;
+						}
+
+						if(dq < level)
+						{
+							break;
+						}
+					}
+
+					if(ancestor >= 0 && explorer_is_last_visible(ancestor) == 0)
+					{
+						bar = 1;
+					}
+
+					if(plen + 2 < (int)sizeof(prefix))
+					{
+						prefix[plen++] = (bar != 0) ? '|' : ' ';
+						prefix[plen++] = ' ';
+						prefix[plen] = '\0';
+					}
 				}
 
-				if(indent < 0)
+				if(plen + 2 < (int)sizeof(prefix))
 				{
-					indent = 0;
+					prefix[plen++] = (explorer_is_last_visible(vpos) != 0) ? '\\' : '|';
+					prefix[plen++] = '-';
+					prefix[plen] = '\0';
 				}
+			}
 
-				memset(text, ' ', (size_t)indent);
-				pos = indent;
-
+			if(explorer_is_parent_row(idx) == 0)
+			{
 				if(s_explorer.is_dir[idx] != 0)
 				{
-					text[pos++] = (s_explorer.expanded[idx] != 0) ? 'v' : '>';
+					if(s_explorer.expanded[idx] != 0)
+					{
+						if(plen + 5 < (int)sizeof(prefix))
+						{
+							memcpy(&prefix[plen], "- [x] ", 6);
+							plen += 6;
+						}
+					}
+					else if(plen + 5 < (int)sizeof(prefix))
+					{
+						memcpy(&prefix[plen], "+ [] ", 5);
+						plen += 5;
+					}
 				}
-				else
+				else if(tree_art == 0 || s_explorer.depth[idx] == 0)
 				{
-					text[pos++] = ' ';
+					if(plen + 2 < (int)sizeof(prefix))
+					{
+						prefix[plen++] = ' ';
+						prefix[plen++] = ' ';
+						prefix[plen] = '\0';
+					}
 				}
-
-				text[pos++] = ' ';
-				text[pos] = '\0';
-				nbytes = (int)utf8_fit_cells(s_explorer.names[idx],
-					strlen(s_explorer.names[idx]), width - pos);
-				memcpy(&text[pos], s_explorer.names[idx], (size_t)nbytes);
-				pos += nbytes;
-				text[pos] = '\0';
-				mvaddnstr(row, 0, text, pos);
 			}
+
+			if(plen > width - 1)
+			{
+				int drop;
+
+				drop = plen - (width - 1);
+				memmove(prefix, &prefix[drop], (size_t)(plen - drop));
+				plen -= drop;
+				prefix[plen] = '\0';
+			}
+
+			nattr = explorer_name_attr(idx);
+			col = plen;
+
+			if(selected != 0)
+			{
+				attron(A_REVERSE);
+			}
+
+			mvaddnstr(row, 0, prefix, plen);
+
+			attron(nattr);
+			nbytes = (int)utf8_fit_cells(s_explorer.names[idx],
+				strlen(s_explorer.names[idx]), width - col);
+
+			if(nbytes > 0)
+			{
+				mvaddnstr(row, col, s_explorer.names[idx], nbytes);
+			}
+
+			attroff(nattr);
 
 			if(selected != 0)
 			{
