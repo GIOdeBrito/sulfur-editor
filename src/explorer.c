@@ -33,7 +33,10 @@ typedef struct
 	char cwd[FILENAME_LIMIT];
 	char query[EXPLORER_MAX_QUERY];
 	char names[EXPLORER_MAX_ENTRIES][EXPLORER_NAME_LIMIT];
+	char paths[EXPLORER_MAX_ENTRIES][FILENAME_LIMIT];
 	int is_dir[EXPLORER_MAX_ENTRIES];
+	int depth[EXPLORER_MAX_ENTRIES];
+	int expanded[EXPLORER_MAX_ENTRIES];
 	int total;
 	int filtered[EXPLORER_MAX_ENTRIES];
 	int count;
@@ -174,17 +177,7 @@ static int explorer_selection_target(char *out, size_t cap, int *is_dir_out)
 		*is_dir_out = s_explorer.is_dir[idx];
 	}
 
-	if(strcmp(s_explorer.cwd, ".") == 0)
-	{
-		if(snprintf(out, cap, "%s", s_explorer.names[idx]) >= (int)cap)
-		{
-			return -1;
-		}
-
-		return 0;
-	}
-
-	if(snprintf(out, cap, "%s/%s", s_explorer.cwd, s_explorer.names[idx]) >= (int)cap)
+	if(snprintf(out, cap, "%s", s_explorer.paths[idx]) >= (int)cap)
 	{
 		return -1;
 	}
@@ -374,6 +367,140 @@ static void explorer_preview_load(void)
 	fclose(fp);
 }
 
+typedef struct
+{
+	char name[EXPLORER_NAME_LIMIT];
+	char path[FILENAME_LIMIT];
+	int is_dir;
+} ExplorerChild;
+
+static ExplorerChild s_kids[EXPLORER_MAX_ENTRIES];
+
+static int explorer_child_before(const ExplorerChild *a, const ExplorerChild *b)
+{
+	if(a == NULL || b == NULL)
+	{
+		return 0;
+	}
+
+	if(a->is_dir != 0 && b->is_dir == 0)
+	{
+		return 1;
+	}
+
+	if(a->is_dir == 0 && b->is_dir != 0)
+	{
+		return 0;
+	}
+
+	return strcmp(a->name, b->name) < 0;
+}
+
+/* List one directory's entries (skips "." / ".."), sorted dirs-first
+then alphabetically. Dir display names keep a trailing '/'. Returns the
+child count, or -1 when the directory cannot be opened. */
+static int explorer_list_dir(const char *dir, ExplorerChild *out, int cap, int *truncated)
+{
+	DIR *dh;
+	struct dirent *ent;
+	int n;
+	int i;
+
+	if(dir == NULL || out == NULL || cap <= 0)
+	{
+		return 0;
+	}
+
+	n = 0;
+	dh = opendir(dir);
+
+	if(dh == NULL)
+	{
+		return -1;
+	}
+
+	while((ent = readdir(dh)) != NULL)
+	{
+		char full[FILENAME_LIMIT];
+		struct stat st;
+		const char *sep;
+
+		if(strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0)
+		{
+			continue;
+		}
+
+		if(n >= cap)
+		{
+			if(truncated != NULL)
+			{
+				*truncated = 1;
+			}
+
+			break;
+		}
+
+		if(dir[0] != '\0' && dir[strlen(dir) - 1] == '/')
+		{
+			sep = "";
+		}
+		else
+		{
+			sep = "/";
+		}
+
+		if(snprintf(full, sizeof(full), "%s%s%s", dir, sep, ent->d_name) >= (int)sizeof(full))
+		{
+			continue;
+		}
+
+		if(lstat(full, &st) != 0)
+		{
+			continue;
+		}
+
+		snprintf(out[n].name, sizeof(out[n].name), "%s", ent->d_name);
+		snprintf(out[n].path, sizeof(out[n].path), "%s", full);
+		out[n].is_dir = S_ISDIR(st.st_mode) ? 1 : 0;
+
+		if(out[n].is_dir != 0)
+		{
+			size_t len;
+
+			len = strlen(out[n].name);
+
+			if(len + 1 < sizeof(out[n].name))
+			{
+				out[n].name[len] = '/';
+				out[n].name[len + 1] = '\0';
+			}
+		}
+
+		n++;
+	}
+
+	closedir(dh);
+
+	for(i = 1; i < n; i++)
+	{
+		ExplorerChild tmp;
+		int j;
+
+		tmp = out[i];
+		j = i - 1;
+
+		while(j >= 0 && explorer_child_before(&tmp, &out[j]))
+		{
+			out[j + 1] = out[j];
+			j--;
+		}
+
+		out[j + 1] = tmp;
+	}
+
+	return n;
+}
+
 static void explorer_refilter(void)
 {
 	int i;
@@ -401,85 +528,6 @@ static void explorer_refilter(void)
 	explorer_preview_invalidate();
 }
 
-static void explorer_sort(void)
-{
-	int i;
-	int j;
-	char tmp[EXPLORER_NAME_LIMIT];
-
-	for(i = 1; i < s_explorer.total; i++)
-	{
-		int tmp_dir;
-		int k;
-
-		if(s_explorer.is_dir[i] != 0)
-		{
-			k = i - 1;
-
-			while(k >= 0 && s_explorer.is_dir[k] == 0)
-			{
-				k--;
-			}
-
-			k++;
-
-			if(k == i)
-			{
-				continue;
-			}
-
-			memcpy(tmp, s_explorer.names[i], sizeof(tmp));
-			tmp_dir = s_explorer.is_dir[i];
-
-			for(j = i; j > k; j--)
-			{
-				memmove(s_explorer.names[j], s_explorer.names[j - 1], sizeof(s_explorer.names[j]));
-				s_explorer.is_dir[j] = s_explorer.is_dir[j - 1];
-			}
-
-			memcpy(s_explorer.names[k], tmp, sizeof(s_explorer.names[k]));
-			s_explorer.is_dir[k] = tmp_dir;
-			continue;
-		}
-
-		memcpy(tmp, s_explorer.names[i], sizeof(tmp));
-		j = i - 1;
-
-		while(j >= 0 && s_explorer.is_dir[j] == 0 && strcmp(s_explorer.names[j], tmp) > 0)
-		{
-			memmove(s_explorer.names[j + 1], s_explorer.names[j], sizeof(s_explorer.names[j + 1]));
-			s_explorer.is_dir[j + 1] = s_explorer.is_dir[j];
-			j--;
-		}
-
-		memcpy(s_explorer.names[j + 1], tmp, sizeof(s_explorer.names[j + 1]));
-		s_explorer.is_dir[j + 1] = 0;
-	}
-
-	for(i = 0; i < s_explorer.total; i++)
-	{
-		int k;
-
-		if(s_explorer.is_dir[i] == 0)
-		{
-			continue;
-		}
-
-		memcpy(tmp, s_explorer.names[i], sizeof(tmp));
-		k = i - 1;
-
-		while(k >= 0 && s_explorer.is_dir[k] != 0 && strcmp(s_explorer.names[k], tmp) > 0)
-		{
-			memmove(s_explorer.names[k + 1], s_explorer.names[k], sizeof(s_explorer.names[k + 1]));
-			s_explorer.is_dir[k + 1] = s_explorer.is_dir[k];
-			k--;
-		}
-
-		memcpy(s_explorer.names[k + 1], tmp, sizeof(s_explorer.names[k + 1]));
-		s_explorer.is_dir[k + 1] = 1;
-	}
-}
-
 static void explorer_set_status(void)
 {
 	char msg[STATUS_LIMIT];
@@ -497,8 +545,9 @@ static void explorer_set_status(void)
 
 static void explorer_rescan(void)
 {
-	DIR *dir;
-	struct dirent *ent;
+	int n;
+	int i;
+	int trunc;
 
 	s_explorer.total = 0;
 	s_explorer.truncated = 0;
@@ -506,68 +555,239 @@ static void explorer_rescan(void)
 	if(strcmp(s_explorer.cwd, "/") != 0)
 	{
 		snprintf(s_explorer.names[0], sizeof(s_explorer.names[0]), "../");
+		snprintf(s_explorer.paths[0], sizeof(s_explorer.paths[0]), "%s", s_explorer.cwd);
 		s_explorer.is_dir[0] = 1;
+		s_explorer.depth[0] = 0;
+		s_explorer.expanded[0] = 0;
 		s_explorer.total = 1;
 	}
 
-	dir = opendir(s_explorer.cwd);
+	trunc = 0;
+	n = explorer_list_dir(s_explorer.cwd, s_kids, EXPLORER_MAX_ENTRIES - s_explorer.total, &trunc);
 
-	if(dir == NULL)
+	if(n < 0)
 	{
 		editor_set_status("Cannot open directory");
 		explorer_refilter();
 		return;
 	}
 
-	while((ent = readdir(dir)) != NULL)
+	for(i = 0; i < n; i++)
 	{
-		char full[FILENAME_LIMIT];
-		struct stat st;
+		int at;
 
-		if(strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0)
-		{
-			continue;
-		}
-
-		if(s_explorer.total >= EXPLORER_MAX_ENTRIES)
-		{
-			s_explorer.truncated = 1;
-			break;
-		}
-
-		if(snprintf(full, sizeof(full), "%s/%s", s_explorer.cwd, ent->d_name) >= (int)sizeof(full))
-		{
-			continue;
-		}
-
-		if(lstat(full, &st) != 0)
-		{
-			continue;
-		}
-
-		snprintf(s_explorer.names[s_explorer.total], sizeof(s_explorer.names[s_explorer.total]), "%s", ent->d_name);
-		s_explorer.is_dir[s_explorer.total] = S_ISDIR(st.st_mode) ? 1 : 0;
-
-		if(s_explorer.is_dir[s_explorer.total] != 0)
-		{
-			size_t len;
-
-			len = strlen(s_explorer.names[s_explorer.total]);
-
-			if(len + 1 < sizeof(s_explorer.names[s_explorer.total]))
-			{
-				s_explorer.names[s_explorer.total][len] = '/';
-				s_explorer.names[s_explorer.total][len + 1] = '\0';
-			}
-		}
-
+		at = s_explorer.total;
+		snprintf(s_explorer.names[at], sizeof(s_explorer.names[at]), "%s", s_kids[i].name);
+		snprintf(s_explorer.paths[at], sizeof(s_explorer.paths[at]), "%s", s_kids[i].path);
+		s_explorer.is_dir[at] = s_kids[i].is_dir;
+		s_explorer.depth[at] = 0;
+		s_explorer.expanded[at] = 0;
 		s_explorer.total++;
 	}
 
-	closedir(dir);
-	explorer_sort();
+	if(trunc != 0)
+	{
+		s_explorer.truncated = 1;
+	}
+
 	explorer_refilter();
 	explorer_set_status();
+}
+
+/* Rebuild the visible list after an expand/collapse, keeping the
+selection on the same row. A non-empty query flattens matches, so it
+falls back to the full refilter (selection resets, as when typing). */
+static void explorer_reindex(int keep_row)
+{
+	int visible;
+	int i;
+
+	if(s_explorer.query[0] != '\0')
+	{
+		explorer_refilter();
+		return;
+	}
+
+	s_explorer.count = 0;
+
+	for(i = 0; i < s_explorer.total; i++)
+	{
+		s_explorer.filtered[s_explorer.count] = i;
+		s_explorer.count++;
+	}
+
+	s_explorer.selected = keep_row;
+
+	if(s_explorer.count == 0)
+	{
+		s_explorer.selected = 0;
+		s_explorer.scroll = 0;
+		explorer_preview_invalidate();
+		return;
+	}
+
+	if(s_explorer.selected < 0)
+	{
+		s_explorer.selected = 0;
+	}
+
+	if(s_explorer.selected >= s_explorer.count)
+	{
+		s_explorer.selected = s_explorer.count - 1;
+	}
+
+	visible = explorer_visible_rows();
+
+	if(visible > s_explorer.count)
+	{
+		visible = s_explorer.count;
+	}
+
+	if(s_explorer.selected < s_explorer.scroll)
+	{
+		s_explorer.scroll = s_explorer.selected;
+	}
+
+	if(s_explorer.selected >= s_explorer.scroll + visible)
+	{
+		s_explorer.scroll = s_explorer.selected - visible + 1;
+	}
+
+	explorer_preview_invalidate();
+}
+
+static int explorer_is_parent_row(int row)
+{
+	if(row < 0 || row >= s_explorer.total)
+	{
+		return 0;
+	}
+
+	return strcmp(s_explorer.names[row], "../") == 0;
+}
+
+static void explorer_expand(int row)
+{
+	int avail;
+	int n;
+	int trunc;
+	int i;
+
+	if(row < 0 || row >= s_explorer.total)
+	{
+		return;
+	}
+
+	if(s_explorer.is_dir[row] == 0 || s_explorer.expanded[row] != 0)
+	{
+		return;
+	}
+
+	if(explorer_is_parent_row(row))
+	{
+		return;
+	}
+
+	avail = EXPLORER_MAX_ENTRIES - s_explorer.total;
+
+	if(avail <= 0)
+	{
+		s_explorer.truncated = 1;
+		explorer_set_status();
+		return;
+	}
+
+	trunc = 0;
+	n = explorer_list_dir(s_explorer.paths[row], s_kids, avail, &trunc);
+
+	if(n < 0)
+	{
+		editor_set_status("Cannot open directory");
+		return;
+	}
+
+	if(n == 0)
+	{
+		s_explorer.expanded[row] = 1;
+		explorer_reindex(row);
+		return;
+	}
+
+	memmove(&s_explorer.names[row + 1 + n], &s_explorer.names[row + 1],
+		sizeof(s_explorer.names[0]) * (size_t)(s_explorer.total - row - 1));
+	memmove(&s_explorer.paths[row + 1 + n], &s_explorer.paths[row + 1],
+		sizeof(s_explorer.paths[0]) * (size_t)(s_explorer.total - row - 1));
+	memmove(&s_explorer.is_dir[row + 1 + n], &s_explorer.is_dir[row + 1],
+		sizeof(s_explorer.is_dir[0]) * (size_t)(s_explorer.total - row - 1));
+	memmove(&s_explorer.depth[row + 1 + n], &s_explorer.depth[row + 1],
+		sizeof(s_explorer.depth[0]) * (size_t)(s_explorer.total - row - 1));
+	memmove(&s_explorer.expanded[row + 1 + n], &s_explorer.expanded[row + 1],
+		sizeof(s_explorer.expanded[0]) * (size_t)(s_explorer.total - row - 1));
+
+	for(i = 0; i < n; i++)
+	{
+		snprintf(s_explorer.names[row + 1 + i], sizeof(s_explorer.names[row + 1 + i]), "%s", s_kids[i].name);
+		snprintf(s_explorer.paths[row + 1 + i], sizeof(s_explorer.paths[row + 1 + i]), "%s", s_kids[i].path);
+		s_explorer.is_dir[row + 1 + i] = s_kids[i].is_dir;
+		s_explorer.depth[row + 1 + i] = s_explorer.depth[row] + 1;
+		s_explorer.expanded[row + 1 + i] = 0;
+	}
+
+	s_explorer.total += n;
+
+	if(trunc != 0)
+	{
+		s_explorer.truncated = 1;
+	}
+
+	s_explorer.expanded[row] = 1;
+	explorer_set_status();
+	explorer_reindex(row);
+}
+
+static void explorer_collapse(int row)
+{
+	int d;
+	int j;
+	int n;
+
+	if(row < 0 || row >= s_explorer.total)
+	{
+		return;
+	}
+
+	if(s_explorer.expanded[row] == 0)
+	{
+		return;
+	}
+
+	d = s_explorer.depth[row];
+	j = row + 1;
+
+	while(j < s_explorer.total && s_explorer.depth[j] > d)
+	{
+		j++;
+	}
+
+	n = j - (row + 1);
+
+	if(n > 0)
+	{
+		memmove(&s_explorer.names[row + 1], &s_explorer.names[j],
+			sizeof(s_explorer.names[0]) * (size_t)(s_explorer.total - j));
+		memmove(&s_explorer.paths[row + 1], &s_explorer.paths[j],
+			sizeof(s_explorer.paths[0]) * (size_t)(s_explorer.total - j));
+		memmove(&s_explorer.is_dir[row + 1], &s_explorer.is_dir[j],
+			sizeof(s_explorer.is_dir[0]) * (size_t)(s_explorer.total - j));
+		memmove(&s_explorer.depth[row + 1], &s_explorer.depth[j],
+			sizeof(s_explorer.depth[0]) * (size_t)(s_explorer.total - j));
+		memmove(&s_explorer.expanded[row + 1], &s_explorer.expanded[j],
+			sizeof(s_explorer.expanded[0]) * (size_t)(s_explorer.total - j));
+		s_explorer.total -= n;
+	}
+
+	s_explorer.expanded[row] = 0;
+	explorer_reindex(row);
 }
 
 static void explorer_parent(void)
@@ -648,23 +868,16 @@ static void explorer_enter(void)
 
 	idx = s_explorer.filtered[s_explorer.selected];
 
-	if(strcmp(s_explorer.names[idx], "../") == 0)
+	if(explorer_is_parent_row(idx))
 	{
 		explorer_parent();
 		return;
 	}
 
-	if(strcmp(s_explorer.cwd, ".") == 0)
+	if(snprintf(target, sizeof(target), "%s", s_explorer.paths[idx]) >= (int)sizeof(target))
 	{
-		snprintf(target, sizeof(target), "%s", s_explorer.names[idx]);
-	}
-	else
-	{
-		if(snprintf(target, sizeof(target), "%s/%s", s_explorer.cwd, s_explorer.names[idx]) >= (int)sizeof(target))
-		{
-			editor_set_status("Path too long");
-			return;
-		}
+		editor_set_status("Path too long");
+		return;
 	}
 
 	if(s_explorer.is_dir[idx] != 0)
@@ -871,12 +1084,42 @@ int explorer_handle_key(int key)
 
 	if(key == KEY_LEFT)
 	{
+		if(s_explorer.count > 0 && s_explorer.selected >= 0 &&
+			s_explorer.selected < s_explorer.count)
+		{
+			int idx;
+
+			idx = s_explorer.filtered[s_explorer.selected];
+
+			if(s_explorer.is_dir[idx] != 0 && s_explorer.expanded[idx] != 0 &&
+				explorer_is_parent_row(idx) == 0)
+			{
+				explorer_collapse(idx);
+				return 0;
+			}
+		}
+
 		explorer_parent();
 		return 0;
 	}
 
 	if(key == KEY_RIGHT)
 	{
+		if(s_explorer.count > 0 && s_explorer.selected >= 0 &&
+			s_explorer.selected < s_explorer.count)
+		{
+			int idx;
+
+			idx = s_explorer.filtered[s_explorer.selected];
+
+			if(s_explorer.is_dir[idx] != 0 && s_explorer.expanded[idx] == 0 &&
+				explorer_is_parent_row(idx) == 0)
+			{
+				explorer_expand(idx);
+				return 0;
+			}
+		}
+
 		explorer_enter();
 		return 0;
 	}
@@ -1027,9 +1270,52 @@ void explorer_draw(void)
 				width = COLS;
 			}
 
-			mvaddnstr(row, 0, s_explorer.names[idx],
-				(int)utf8_fit_cells(s_explorer.names[idx],
-				strlen(s_explorer.names[idx]), width));
+			{
+				char text[EXPLORER_NAME_LIMIT + 64];
+				int indent;
+				int room;
+				int pos;
+				int nbytes;
+
+				indent = s_explorer.depth[idx] * 2;
+				room = width - 2;
+
+				if(room < 1)
+				{
+					room = 1;
+				}
+
+				if(indent > room - 1)
+				{
+					indent = room - 1;
+				}
+
+				if(indent < 0)
+				{
+					indent = 0;
+				}
+
+				memset(text, ' ', (size_t)indent);
+				pos = indent;
+
+				if(s_explorer.is_dir[idx] != 0)
+				{
+					text[pos++] = (s_explorer.expanded[idx] != 0) ? 'v' : '>';
+				}
+				else
+				{
+					text[pos++] = ' ';
+				}
+
+				text[pos++] = ' ';
+				text[pos] = '\0';
+				nbytes = (int)utf8_fit_cells(s_explorer.names[idx],
+					strlen(s_explorer.names[idx]), width - pos);
+				memcpy(&text[pos], s_explorer.names[idx], (size_t)nbytes);
+				pos += nbytes;
+				text[pos] = '\0';
+				mvaddnstr(row, 0, text, pos);
+			}
 
 			if(selected != 0)
 			{
