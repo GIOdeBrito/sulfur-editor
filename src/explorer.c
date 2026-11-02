@@ -7,6 +7,7 @@
 #include "buffer.h"
 #include "common.h"
 #include "complete.h"
+#include "config.h"
 #include "editor.h"
 #include "explorer.h"
 #include "highlight.h"
@@ -1280,6 +1281,7 @@ void explorer_draw(void)
 	int tree_w;
 	int preview_w;
 	int tree_art;
+	int level_w;
 	int qlen;
 	int i;
 	char title[STATUS_LIMIT];
@@ -1303,6 +1305,12 @@ void explorer_draw(void)
 	tree_w = explorer_tree_width();
 	preview_w = explorer_preview_width();
 	tree_art = (s_explorer.query[0] == '\0');
+	level_w = config_tab_width();
+
+	if(level_w < 2)
+	{
+		level_w = 2;
+	}
 
 	move(EXPLORER_TITLE_ROW, 0);
 	clrtoeol();
@@ -1366,10 +1374,18 @@ void explorer_draw(void)
 			if(tree_art != 0 && explorer_is_parent_row(idx) == 0 &&
 				s_explorer.depth[idx] > 0)
 			{
+				int max_levels;
 				int start;
 				int level;
 
-				start = s_explorer.depth[idx] - 32;
+				max_levels = ((int)sizeof(prefix) - 8) / level_w;
+
+				if(max_levels < 1)
+				{
+					max_levels = 1;
+				}
+
+				start = s_explorer.depth[idx] - max_levels;
 
 				if(start < 0)
 				{
@@ -1381,6 +1397,7 @@ void explorer_draw(void)
 					int q;
 					int ancestor;
 					int bar;
+					int pad;
 
 					ancestor = -1;
 					bar = 0;
@@ -1408,18 +1425,26 @@ void explorer_draw(void)
 						bar = 1;
 					}
 
-					if(plen + 2 < (int)sizeof(prefix))
+					if(plen + level_w >= (int)sizeof(prefix))
 					{
-						prefix[plen++] = (bar != 0) ? '|' : ' ';
-						prefix[plen++] = ' ';
-						prefix[plen] = '\0';
+						break;
 					}
+
+					prefix[plen++] = (bar != 0) ? '|' : ' ';
+
+					for(pad = 1; pad < level_w; pad++)
+					{
+						prefix[plen++] = ' ';
+					}
+
+					prefix[plen] = '\0';
 				}
 
-				if(plen + 2 < (int)sizeof(prefix))
+				if(plen + 3 < (int)sizeof(prefix))
 				{
 					prefix[plen++] = (explorer_is_last_visible(vpos) != 0) ? '\\' : '|';
 					prefix[plen++] = '-';
+					prefix[plen++] = ' ';
 					prefix[plen] = '\0';
 				}
 			}
