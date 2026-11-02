@@ -827,50 +827,70 @@ void editor_draw_lines(Buffer *b, View *v)
 				break;
 			}
 
-			if(kind == 0 || kind == 3)
 			{
-				attron(A_REVERSE);
-			}
-			else if(kind == 2)
-			{
-				attron(A_BOLD);
-			}
+				int base;
+				int extra;
 
-			k = i;
+				base = highlight_attr(HL_NORMAL);
 
-			while(k < m)
-			{
-				if(line->data[k] == '\t')
+				if(base != A_NORMAL)
 				{
-					int w;
-
-					w = editor_tab_cells(hidden + used);
-					editor_draw_tab(y + VIEW_TOP, col, w);
-					col += w;
-					used += w;
-					k = line_char_next(line, k);
+					attron(base);
 				}
-				else
+
+				extra = A_NORMAL;
+
+				if(kind == 0 || kind == 3)
 				{
-					size_t n;
-					int w;
-
-					n = line_char_next(line, k);
-					w = utf8_char_width(&line->data[k], line->len - k);
-					mvaddnstr(y + VIEW_TOP, col, &line->data[k], (int)(n - k));
-					col += w;
-					used += w;
-					k = n;
+					extra = A_REVERSE;
 				}
-			}
+				else if(kind == 2)
+				{
+					extra = A_BOLD;
+				}
 
-			if(kind == 0 || kind == 3)
-			{
-				attroff(A_REVERSE);
-			}
-			else if(kind == 2)
-			{
-				attroff(A_BOLD);
+				if(extra != A_NORMAL)
+				{
+					attron(extra);
+				}
+
+				k = i;
+
+				while(k < m)
+				{
+					if(line->data[k] == '\t')
+					{
+						int w;
+
+						w = editor_tab_cells(hidden + used);
+						editor_draw_tab(y + VIEW_TOP, col, w);
+						col += w;
+						used += w;
+						k = line_char_next(line, k);
+					}
+					else
+					{
+						size_t n;
+						int w;
+
+						n = line_char_next(line, k);
+						w = utf8_char_width(&line->data[k], line->len - k);
+						mvaddnstr(y + VIEW_TOP, col, &line->data[k], (int)(n - k));
+						col += w;
+						used += w;
+						k = n;
+					}
+				}
+
+				if(extra != A_NORMAL)
+				{
+					attroff(extra);
+				}
+
+				if(base != A_NORMAL)
+				{
+					attroff(base);
+				}
 			}
 
 			i = m;

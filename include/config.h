@@ -6,13 +6,16 @@
 #define CONFIG_MAX_TAB_WIDTH 16
 #define CONFIG_MAX_KEYS_PER_ACTION 3
 
-/* Class indexes for config_highlight_fg(), in HlClass order subset. */
+/* Class indexes for config_highlight_fg(), in HlClass order subset,
+plus the base text/background slots. */
 #define CONFIG_HL_KEYWORD 0
 #define CONFIG_HL_STRING 1
 #define CONFIG_HL_COMMENT 2
 #define CONFIG_HL_NUMBER 3
 #define CONFIG_HL_PREPROC 4
-#define CONFIG_HL_COUNT 5
+#define CONFIG_HL_TEXT 5
+#define CONFIG_HL_BG 6
+#define CONFIG_HL_COUNT 7
 
 /* Load ~/.config/sulf (XDG-aware, see config.c). Missing file keeps
 all defaults silently; bad lines are ignored with a status notice. */

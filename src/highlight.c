@@ -14,6 +14,7 @@
 #define HL_PAIR_COMMENT 3
 #define HL_PAIR_NUMBER 4
 #define HL_PAIR_PREPROC 5
+#define HL_PAIR_NORMAL 6
 
 static const char *s_keywords[] =
 {
@@ -739,6 +740,34 @@ static int hl_fit_fg(int fg, int fallback)
 	return fg;
 }
 
+/* Base pair for plain text: soft off-white on the painted dark
+background. Only used when both fit this terminal (acid on 256
+colors); otherwise -1/-1 keeps the terminal's own colors. */
+static int hl_base_fitted(int *fg_out, int *bg_out)
+{
+	int fg;
+	int bg;
+
+	if(fg_out == NULL || bg_out == NULL)
+	{
+		return 0;
+	}
+
+	fg = config_highlight_fg(CONFIG_HL_TEXT);
+	bg = config_highlight_fg(CONFIG_HL_BG);
+
+	if(fg < 0 || fg >= COLORS || bg < 0 || bg >= COLORS)
+	{
+		*fg_out = -1;
+		*bg_out = -1;
+		return 0;
+	}
+
+	*fg_out = fg;
+	*bg_out = bg;
+	return 1;
+}
+
 void highlight_init_color(void)
 {
 	static const int def_fb[5] = { COLOR_YELLOW, COLOR_GREEN, COLOR_CYAN, COLOR_MAGENTA, COLOR_RED };
@@ -746,6 +775,9 @@ void highlight_init_color(void)
 	const int *fb;
 	int acid;
 	int fg;
+	int bg;
+	int base_fg;
+	int base_bg;
 
 	s_color = 0;
 
@@ -769,17 +801,34 @@ void highlight_init_color(void)
 	acid = config_highlight_acid();
 	fb = acid != 0 ? acid_fb : def_fb;
 
+	if(hl_base_fitted(&base_fg, &base_bg) != 0)
+	{
+		bg = base_bg;
+	}
+	else
+	{
+		base_fg = -1;
+		base_bg = -1;
+		bg = -1;
+	}
+
 	fg = config_highlight_fg(CONFIG_HL_KEYWORD);
-	init_pair(HL_PAIR_KEYWORD, hl_fit_fg(fg, fb[0]), -1);
+	init_pair(HL_PAIR_KEYWORD, hl_fit_fg(fg, fb[0]), bg);
 	fg = config_highlight_fg(CONFIG_HL_STRING);
-	init_pair(HL_PAIR_STRING, hl_fit_fg(fg, fb[1]), -1);
+	init_pair(HL_PAIR_STRING, hl_fit_fg(fg, fb[1]), bg);
 	fg = config_highlight_fg(CONFIG_HL_COMMENT);
-	init_pair(HL_PAIR_COMMENT, hl_fit_fg(fg, fb[2]), -1);
+	init_pair(HL_PAIR_COMMENT, hl_fit_fg(fg, fb[2]), bg);
 	fg = config_highlight_fg(CONFIG_HL_NUMBER);
-	init_pair(HL_PAIR_NUMBER, hl_fit_fg(fg, fb[3]), -1);
+	init_pair(HL_PAIR_NUMBER, hl_fit_fg(fg, fb[3]), bg);
 	fg = config_highlight_fg(CONFIG_HL_PREPROC);
-	init_pair(HL_PAIR_PREPROC, hl_fit_fg(fg, fb[4]), -1);
+	init_pair(HL_PAIR_PREPROC, hl_fit_fg(fg, fb[4]), bg);
+	init_pair(HL_PAIR_NORMAL, base_fg, base_bg);
 	s_color = 1;
+
+	if(base_bg >= 0)
+	{
+		bkgd((chtype)COLOR_PAIR(HL_PAIR_NORMAL));
+	}
 }
 
 int highlight_use_color(void)
@@ -817,6 +866,16 @@ int highlight_attr(HlClass cls)
 	if(cls == HL_PREPROC)
 	{
 		return COLOR_PAIR(HL_PAIR_PREPROC);
+	}
+
+	{
+		int base_fg;
+		int base_bg;
+
+		if(s_color != 0 && hl_base_fitted(&base_fg, &base_bg) != 0)
+		{
+			return COLOR_PAIR(HL_PAIR_NORMAL);
+		}
 	}
 
 	return A_NORMAL;

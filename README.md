@@ -48,6 +48,8 @@ color.keyword = yellow   # keyword/string/comment/number/preproc:
 color.string = green     # black red green yellow blue magenta cyan
 color.comment = cyan     # white default none, or a 0-255 palette
                          # index when the terminal supports 256 colors
+color.text = 250         # base text fg (soft white, acid only)
+color.background = 234   # base background (dark, acid only)
 key.save = Ctrl-S        # Ctrl-<letter|Space|]|^>  F1..F12
 key.palette = Ctrl-P,F1  # Tab Enter Backspace Delete DEL
                          # Up Down Left Right Home End PgUp PgDn

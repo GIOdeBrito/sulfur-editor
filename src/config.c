@@ -74,7 +74,7 @@ static const ConfigDefault s_defaults[] =
 };
 
 static int s_tab_width = CONFIG_DEFAULT_TAB_WIDTH;
-static int s_fg[CONFIG_HL_COUNT] = { 156, 108, 243, 223, 149 };
+static int s_fg[CONFIG_HL_COUNT] = { 156, 108, 243, 223, 149, 250, 234 };
 static int s_fg_set[CONFIG_HL_COUNT] = { 0, 0, 0, 0, 0 };
 static int s_mono = 0;
 static int s_acid = 1;
@@ -170,6 +170,16 @@ static int config_class_index(const char *name)
 	if(strcmp(name, "preproc") == 0)
 	{
 		return CONFIG_HL_PREPROC;
+	}
+
+	if(strcmp(name, "text") == 0)
+	{
+		return CONFIG_HL_TEXT;
+	}
+
+	if(strcmp(name, "background") == 0)
+	{
+		return CONFIG_HL_BG;
 	}
 
 	return -1;
@@ -641,9 +651,9 @@ static void config_parse_key_value(const char *action, char *value)
 
 static void config_apply_preset(const char *name)
 {
-	static const int def[CONFIG_HL_COUNT] = { 3, 2, 6, 5, 1 };
-	static const int hi[CONFIG_HL_COUNT] = { 7, 3, 7, 6, 5 };
-	static const int acid[CONFIG_HL_COUNT] = { 156, 108, 243, 223, 149 };
+	static const int def[CONFIG_HL_COUNT] = { 3, 2, 6, 5, 1, -1, -1 };
+	static const int hi[CONFIG_HL_COUNT] = { 7, 3, 7, 6, 5, -1, -1 };
+	static const int acid[CONFIG_HL_COUNT] = { 156, 108, 243, 223, 149, 250, 234 };
 	int i;
 
 	if(name == NULL)
