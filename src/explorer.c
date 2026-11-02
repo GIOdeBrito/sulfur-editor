@@ -1098,6 +1098,34 @@ int explorer_handle_key(int key)
 			{
 				explorer_collapse(idx);
 			}
+			else if(s_explorer.query[0] == '\0' &&
+				explorer_is_parent_row(idx) == 0 &&
+				s_explorer.depth[idx] > 0)
+			{
+				int q;
+
+				for(q = s_explorer.selected - 1; q >= 0; q--)
+				{
+					int parent;
+
+					parent = s_explorer.filtered[q];
+
+					if(s_explorer.depth[parent] == s_explorer.depth[idx] - 1)
+					{
+						if(s_explorer.expanded[parent] != 0)
+						{
+							explorer_collapse(parent);
+						}
+
+						break;
+					}
+
+					if(s_explorer.depth[parent] < s_explorer.depth[idx] - 1)
+					{
+						break;
+					}
+				}
+			}
 		}
 
 		return 0;
