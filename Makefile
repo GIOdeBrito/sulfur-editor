@@ -14,26 +14,26 @@ $(BLD)/sulf: $(OBJS)
 $(BLD)/%.o: $(SRC)/%.c | $(BLD)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BLD)/main.o: $(SRC)/main.c $(INC)/common.h $(INC)/config.h $(INC)/editor.h $(INC)/git.h $(INC)/buffer.h $(INC)/input.h $(INC)/screen.h
+$(BLD)/main.o: $(SRC)/main.c $(INC)/common.h $(INC)/config.h $(INC)/editor.h $(INC)/git.h $(INC)/buffer.h $(INC)/input.h $(INC)/screen.h $(INC)/complete.h $(INC)/highlight.h $(INC)/line.h $(INC)/search.h $(INC)/tabs.h $(INC)/undo.h
 $(BLD)/line.o: $(SRC)/line.c $(INC)/common.h $(INC)/config.h $(INC)/line.h $(INC)/util.h
 $(BLD)/util.o: $(SRC)/util.c $(INC)/util.h $(INC)/screen.h
 $(BLD)/editor.o: $(SRC)/editor.c $(INC)/clipboard.h $(INC)/common.h $(INC)/complete.h $(INC)/editor.h $(INC)/git.h $(INC)/highlight.h $(INC)/line.h $(INC)/search.h $(INC)/undo.h $(INC)/util.h $(INC)/view.h
 $(BLD)/buffer.o: $(SRC)/buffer.c $(INC)/buffer.h $(INC)/common.h $(INC)/complete.h $(INC)/editor.h $(INC)/git.h $(INC)/highlight.h $(INC)/line.h $(INC)/search.h $(INC)/undo.h $(INC)/util.h
-$(BLD)/edit.o: $(SRC)/edit.c $(INC)/edit.h $(INC)/buffer.h $(INC)/common.h $(INC)/config.h $(INC)/editor.h $(INC)/git.h $(INC)/highlight.h $(INC)/line.h $(INC)/undo.h $(INC)/view.h
-$(BLD)/view.o: $(SRC)/view.c $(INC)/view.h $(INC)/buffer.h $(INC)/common.h $(INC)/config.h $(INC)/editor.h $(INC)/git.h $(INC)/highlight.h $(INC)/line.h $(INC)/search.h
-$(BLD)/input.o: $(SRC)/input.c $(INC)/input.h $(INC)/buffer.h $(INC)/clipboard.h $(INC)/common.h $(INC)/complete.h $(INC)/config.h $(INC)/edit.h $(INC)/editor.h $(INC)/git.h $(INC)/explorer.h $(INC)/focus.h $(INC)/mouse.h $(INC)/palette.h $(INC)/search.h $(INC)/undo.h $(INC)/view.h
-$(BLD)/screen.o: $(SRC)/screen.c $(INC)/screen.h $(INC)/focus.h $(INC)/highlight.h $(INC)/mouse.h
+$(BLD)/edit.o: $(SRC)/edit.c $(INC)/edit.h $(INC)/buffer.h $(INC)/common.h $(INC)/config.h $(INC)/editor.h $(INC)/git.h $(INC)/highlight.h $(INC)/line.h $(INC)/undo.h $(INC)/view.h $(INC)/complete.h $(INC)/search.h
+$(BLD)/view.o: $(SRC)/view.c $(INC)/view.h $(INC)/buffer.h $(INC)/common.h $(INC)/config.h $(INC)/editor.h $(INC)/git.h $(INC)/highlight.h $(INC)/line.h $(INC)/search.h $(INC)/complete.h $(INC)/tabs.h $(INC)/undo.h
+$(BLD)/input.o: $(SRC)/input.c $(INC)/input.h $(INC)/buffer.h $(INC)/clipboard.h $(INC)/common.h $(INC)/complete.h $(INC)/config.h $(INC)/edit.h $(INC)/editor.h $(INC)/git.h $(INC)/explorer.h $(INC)/focus.h $(INC)/mouse.h $(INC)/palette.h $(INC)/search.h $(INC)/undo.h $(INC)/view.h $(INC)/highlight.h $(INC)/line.h $(INC)/tabs.h
+$(BLD)/screen.o: $(SRC)/screen.c $(INC)/screen.h $(INC)/focus.h $(INC)/highlight.h $(INC)/mouse.h $(INC)/common.h $(INC)/git.h
 $(BLD)/complete.o: $(SRC)/complete.c $(INC)/complete.h $(INC)/common.h $(INC)/edit.h $(INC)/editor.h $(INC)/git.h $(INC)/highlight.h $(INC)/line.h $(INC)/search.h $(INC)/undo.h $(INC)/view.h
-$(BLD)/highlight.o: $(SRC)/highlight.c $(INC)/highlight.h $(INC)/common.h $(INC)/config.h $(INC)/editor.h $(INC)/git.h $(INC)/line.h $(INC)/util.h
-$(BLD)/mouse.o: $(SRC)/mouse.c $(INC)/mouse.h $(INC)/common.h $(INC)/complete.h $(INC)/editor.h $(INC)/git.h $(INC)/search.h $(INC)/view.h
-$(BLD)/undo.o: $(SRC)/undo.c $(INC)/undo.h $(INC)/common.h $(INC)/editor.h $(INC)/git.h $(INC)/highlight.h $(INC)/line.h $(INC)/util.h
-$(BLD)/search.o: $(SRC)/search.c $(INC)/search.h $(INC)/common.h $(INC)/complete.h $(INC)/editor.h $(INC)/git.h $(INC)/line.h
-$(BLD)/focus.o: $(SRC)/focus.c $(INC)/focus.h $(INC)/buffer.h $(INC)/editor.h $(INC)/git.h
-$(BLD)/palette.o: $(SRC)/palette.c $(INC)/palette.h $(INC)/buffer.h $(INC)/clipboard.h $(INC)/common.h $(INC)/complete.h $(INC)/edit.h $(INC)/editor.h $(INC)/git.h $(INC)/explorer.h $(INC)/input.h $(INC)/search.h $(INC)/undo.h
-$(BLD)/clipboard.o: $(SRC)/clipboard.c $(INC)/clipboard.h $(INC)/buffer.h $(INC)/common.h $(INC)/edit.h $(INC)/editor.h $(INC)/git.h $(INC)/highlight.h $(INC)/line.h $(INC)/search.h $(INC)/undo.h
-$(BLD)/explorer.o: $(SRC)/explorer.c $(INC)/explorer.h $(INC)/buffer.h $(INC)/common.h $(INC)/complete.h $(INC)/editor.h $(INC)/git.h $(INC)/input.h $(INC)/line.h $(INC)/palette.h $(INC)/search.h $(INC)/tabs.h
-$(BLD)/tabs.o: $(SRC)/tabs.c $(INC)/tabs.h $(INC)/buffer.h $(INC)/common.h $(INC)/complete.h $(INC)/editor.h $(INC)/git.h $(INC)/search.h $(INC)/undo.h $(INC)/view.h
-$(BLD)/git.o: $(SRC)/git.c $(INC)/git.h $(INC)/common.h $(INC)/editor.h
+$(BLD)/highlight.o: $(SRC)/highlight.c $(INC)/highlight.h $(INC)/common.h $(INC)/config.h $(INC)/editor.h $(INC)/git.h $(INC)/line.h $(INC)/util.h $(INC)/complete.h $(INC)/search.h $(INC)/undo.h
+$(BLD)/mouse.o: $(SRC)/mouse.c $(INC)/mouse.h $(INC)/common.h $(INC)/complete.h $(INC)/editor.h $(INC)/git.h $(INC)/search.h $(INC)/view.h $(INC)/highlight.h $(INC)/line.h $(INC)/tabs.h $(INC)/undo.h
+$(BLD)/undo.o: $(SRC)/undo.c $(INC)/undo.h $(INC)/common.h $(INC)/editor.h $(INC)/git.h $(INC)/highlight.h $(INC)/line.h $(INC)/util.h $(INC)/complete.h $(INC)/search.h
+$(BLD)/search.o: $(SRC)/search.c $(INC)/search.h $(INC)/common.h $(INC)/complete.h $(INC)/editor.h $(INC)/git.h $(INC)/line.h $(INC)/highlight.h $(INC)/undo.h
+$(BLD)/focus.o: $(SRC)/focus.c $(INC)/focus.h $(INC)/buffer.h $(INC)/editor.h $(INC)/git.h $(INC)/common.h $(INC)/complete.h $(INC)/highlight.h $(INC)/line.h $(INC)/search.h $(INC)/tabs.h $(INC)/undo.h
+$(BLD)/palette.o: $(SRC)/palette.c $(INC)/palette.h $(INC)/buffer.h $(INC)/clipboard.h $(INC)/common.h $(INC)/complete.h $(INC)/edit.h $(INC)/editor.h $(INC)/git.h $(INC)/explorer.h $(INC)/input.h $(INC)/search.h $(INC)/undo.h $(INC)/highlight.h $(INC)/line.h $(INC)/tabs.h
+$(BLD)/clipboard.o: $(SRC)/clipboard.c $(INC)/clipboard.h $(INC)/buffer.h $(INC)/common.h $(INC)/edit.h $(INC)/editor.h $(INC)/git.h $(INC)/highlight.h $(INC)/line.h $(INC)/search.h $(INC)/undo.h $(INC)/complete.h
+$(BLD)/explorer.o: $(SRC)/explorer.c $(INC)/explorer.h $(INC)/buffer.h $(INC)/common.h $(INC)/complete.h $(INC)/editor.h $(INC)/git.h $(INC)/input.h $(INC)/line.h $(INC)/palette.h $(INC)/search.h $(INC)/tabs.h $(INC)/config.h $(INC)/highlight.h $(INC)/undo.h
+$(BLD)/tabs.o: $(SRC)/tabs.c $(INC)/tabs.h $(INC)/buffer.h $(INC)/common.h $(INC)/complete.h $(INC)/editor.h $(INC)/git.h $(INC)/search.h $(INC)/undo.h $(INC)/view.h $(INC)/clipboard.h $(INC)/highlight.h $(INC)/line.h
+$(BLD)/git.o: $(SRC)/git.c $(INC)/git.h $(INC)/common.h $(INC)/editor.h $(INC)/complete.h $(INC)/highlight.h $(INC)/line.h $(INC)/search.h $(INC)/undo.h
 $(BLD)/config.o: $(SRC)/config.c $(INC)/config.h $(INC)/common.h
 
 $(BLD):
