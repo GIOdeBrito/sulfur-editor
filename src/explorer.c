@@ -1095,11 +1095,9 @@ int explorer_handle_key(int key)
 				explorer_is_parent_row(idx) == 0)
 			{
 				explorer_collapse(idx);
-				return 0;
 			}
 		}
 
-		explorer_parent();
 		return 0;
 	}
 
