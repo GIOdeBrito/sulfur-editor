@@ -1,6 +1,6 @@
 # sulf
 
-A small terminal text editor. Single binary, no dependencies beyond ncurses.
+The text editor that stinks.
 
 ## Build
 
