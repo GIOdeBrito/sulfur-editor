@@ -811,6 +811,24 @@ static void explorer_parent(void)
 		return;
 	}
 
+	if(strcmp(s_explorer.cwd, "..") == 0 ||
+		(strlen(s_explorer.cwd) > 3 &&
+			strcmp(&s_explorer.cwd[strlen(s_explorer.cwd) - 3], "/..") == 0))
+	{
+		if(snprintf(parent, sizeof(parent), "%s/..", s_explorer.cwd) >= (int)sizeof(parent))
+		{
+			snprintf(s_explorer.cwd, sizeof(s_explorer.cwd), ".");
+		}
+		else
+		{
+			snprintf(s_explorer.cwd, sizeof(s_explorer.cwd), "%s", parent);
+		}
+
+		s_explorer.query[0] = '\0';
+		explorer_rescan();
+		return;
+	}
+
 	snprintf(parent, sizeof(parent), "%s", s_explorer.cwd);
 	len = strlen(parent);
 
@@ -892,6 +910,11 @@ static void explorer_enter(void)
 		{
 			target[len - 1] = '\0';
 			len--;
+		}
+
+		if(target[0] == '\0')
+		{
+			snprintf(target, sizeof(target), "/");
 		}
 
 		snprintf(s_explorer.cwd, sizeof(s_explorer.cwd), "%s", target);
@@ -1406,7 +1429,7 @@ void explorer_draw(void)
 				int start;
 				int level;
 
-				max_levels = ((int)sizeof(prefix) - 8) / level_w;
+				max_levels = ((int)sizeof(prefix) - 8 - 6) / level_w;
 
 				if(max_levels < 1)
 				{

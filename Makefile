@@ -31,7 +31,7 @@ $(BLD)/search.o: $(SRC)/search.c $(INC)/search.h $(INC)/common.h $(INC)/complete
 $(BLD)/focus.o: $(SRC)/focus.c $(INC)/focus.h $(INC)/buffer.h $(INC)/editor.h $(INC)/git.h $(INC)/common.h $(INC)/complete.h $(INC)/highlight.h $(INC)/line.h $(INC)/search.h $(INC)/tabs.h $(INC)/undo.h
 $(BLD)/palette.o: $(SRC)/palette.c $(INC)/palette.h $(INC)/buffer.h $(INC)/clipboard.h $(INC)/common.h $(INC)/complete.h $(INC)/edit.h $(INC)/editor.h $(INC)/git.h $(INC)/explorer.h $(INC)/input.h $(INC)/search.h $(INC)/undo.h $(INC)/highlight.h $(INC)/line.h $(INC)/tabs.h
 $(BLD)/clipboard.o: $(SRC)/clipboard.c $(INC)/clipboard.h $(INC)/buffer.h $(INC)/common.h $(INC)/edit.h $(INC)/editor.h $(INC)/git.h $(INC)/highlight.h $(INC)/line.h $(INC)/search.h $(INC)/undo.h $(INC)/complete.h
-$(BLD)/explorer.o: $(SRC)/explorer.c $(INC)/explorer.h $(INC)/buffer.h $(INC)/common.h $(INC)/complete.h $(INC)/editor.h $(INC)/git.h $(INC)/input.h $(INC)/line.h $(INC)/palette.h $(INC)/search.h $(INC)/tabs.h $(INC)/config.h $(INC)/highlight.h $(INC)/undo.h
+$(BLD)/explorer.o: $(SRC)/explorer.c $(INC)/explorer.h $(INC)/buffer.h $(INC)/common.h $(INC)/complete.h $(INC)/config.h $(INC)/editor.h $(INC)/git.h $(INC)/highlight.h $(INC)/input.h $(INC)/line.h $(INC)/palette.h $(INC)/search.h $(INC)/tabs.h $(INC)/config.h $(INC)/highlight.h $(INC)/undo.h
 $(BLD)/tabs.o: $(SRC)/tabs.c $(INC)/tabs.h $(INC)/buffer.h $(INC)/common.h $(INC)/complete.h $(INC)/editor.h $(INC)/git.h $(INC)/search.h $(INC)/undo.h $(INC)/view.h $(INC)/clipboard.h $(INC)/highlight.h $(INC)/line.h
 $(BLD)/git.o: $(SRC)/git.c $(INC)/git.h $(INC)/common.h $(INC)/editor.h $(INC)/complete.h $(INC)/highlight.h $(INC)/line.h $(INC)/search.h $(INC)/undo.h
 $(BLD)/config.o: $(SRC)/config.c $(INC)/config.h $(INC)/common.h
