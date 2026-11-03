@@ -22,7 +22,7 @@ static void print_help(const char *prog)
 	printf("\n");
 	printf("sulf %s - a small terminal text editor.\n", SULF_VERSION);
 	printf("\n");
-	printf("Each file opens in its own tab (top row, click or Ctrl-]/Ctrl-[ to switch).\n");
+	printf("Each file opens in its own tab (top row, click or Ctrl-]/Ctrl-^ to switch).\n");
 	printf("\n");
 	printf("Keys:\n");
 	printf("  Arrows / Home / End / PgUp / PgDn   Move (Ctrl-A / Ctrl-E also Home / End)\n");

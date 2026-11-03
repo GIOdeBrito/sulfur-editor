@@ -12,7 +12,7 @@ make clean    # wipes build/
 ```
 
 Run as `build/sulf [file ...]`. Each file opens in its own tab
-(top row: click a tab or use `Ctrl-]` / `Ctrl-[` to switch).
+(top row: click a tab or use `Ctrl-]` / `Ctrl-^` to switch).
 
 ## Keys
 
@@ -27,7 +27,7 @@ Run as `build/sulf [file ...]`. Each file opens in its own tab
 | `Ctrl-C` / `Ctrl-X` / `Ctrl-V` | Copy / cut / paste selection |
 | `Ctrl-F`, then `n` / `N` / `Enter` | Find next / previous match, `Esc` cancels |
 | `Ctrl-P` / `F1` | Command palette, `Esc` cancels |
-| `F2` | File explorer, `Esc` cancels |
+| `F2` | File explorer (`Right` expand, `Enter` open, `Left` collapse, `Esc` cancels) |
 | `Ctrl-Z` / `Ctrl-Y` | Undo / redo (per buffer) |
 | `Ctrl-Space` | Force completion (`Tab` / `Enter` accept) |
 | Mouse click / wheel | Move cursor / scroll / switch tab |
