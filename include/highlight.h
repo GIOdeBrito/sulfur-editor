@@ -9,7 +9,12 @@ typedef enum
 {
 	HL_PLAIN,
 	HL_C,
-	HL_MD
+	HL_MD,
+	HL_JS,
+	HL_PHP,
+	HL_CS,
+	HL_SQL,
+	HL_YAML
 } HlFiletype;
 
 typedef enum

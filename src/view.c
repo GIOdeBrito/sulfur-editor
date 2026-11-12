@@ -905,6 +905,46 @@ void editor_draw_tabs(void)
 	tabs_draw_bar();
 }
 
+static const char *editor_filetype_label(HlFiletype ft)
+{
+	if(ft == HL_C)
+	{
+		return "C";
+	}
+
+	if(ft == HL_MD)
+	{
+		return "MD";
+	}
+
+	if(ft == HL_JS)
+	{
+		return "JS";
+	}
+
+	if(ft == HL_PHP)
+	{
+		return "PHP";
+	}
+
+	if(ft == HL_CS)
+	{
+		return "CS";
+	}
+
+	if(ft == HL_SQL)
+	{
+		return "SQL";
+	}
+
+	if(ft == HL_YAML)
+	{
+		return "YAML";
+	}
+
+	return "-";
+}
+
 void editor_draw_status(void)
 {
 	int msg_row;
@@ -976,7 +1016,7 @@ void editor_draw_status(void)
 		snprintf(left, sizeof(left), "%s%s", fname, dirty ? " *" : "");
 	}
 
-	snprintf(right, sizeof(right), "%s %s %zu:%zu/%zu  Ctrl-Q quit | F1 palette | F2 explorer", eol, ft == HL_C ? "C" : (ft == HL_MD ? "MD" : "-"), cy + 1, col, num_lines);
+	snprintf(right, sizeof(right), "%s %s %zu:%zu/%zu  Ctrl-Q quit | F1 palette | F2 explorer", eol, editor_filetype_label(ft), cy + 1, col, num_lines);
 	attron(A_REVERSE);
 	move(status_row, 0);
 	clrtoeol();

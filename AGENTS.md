@@ -42,7 +42,7 @@ C11 ncurses editor. Single binary, no tests (`tests/` empty), no CI.
 
 ## Feature contracts (one line each)
 
-- Highlight: C (`.c`/`.h`) + Markdown (`.md`) only; per-line cache + full rescan on dirty; tracks `/* */` and ```` ``` ````/`~~~` state.
+- Highlight: C (`.c`/`.h`), Markdown (`.md`), JavaScript (`.js`/`.cjs`), PHP (`.php`), C# (`.cs`), SQL (`.sql`), YAML (`.yaml`/`.yml`); per-line cache + full rescan on dirty; tracks `/* */` and ```` ``` ````/`~~~` state.
 - Complete: popup after 2 word chars + `Ctrl-Space`; `Tab`/`Enter` accept, `Esc` cancels; accept clears selection, deactivates search, appends one trailing space.
 - Search: `Ctrl-F` sticky, `strstr`, case-sensitive, 512 matches/buffer; `n`/`Enter` next, `N` prev, `Esc` cancels. Edits/clicks/completion-accept deactivate (query kept); nav/wheel/resize preserve.
 - Select: end-exclusive, anchor `sel_ax`/`ay` + active `cx`/`cy`. Only plain moves, mouse clicks, completion-accept clear. Typing/`Enter`/Backspace/Del replace/delete range; `Tab` block-indents.

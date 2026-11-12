@@ -84,7 +84,9 @@ line always show the default keys.
 - Undo keeps up to 64 full-buffer snapshots per buffer; typing runs coalesce so one
   `Ctrl-Z` reverts one typed stretch. Selection edits, indent, completion,
   and palette actions are all undoable.
-- Syntax highlighting covers C (`.c`/`.h`) and Markdown (`.md`).
+- Syntax highlighting covers C (`.c`/`.h`), Markdown (`.md`), JavaScript
+  (`.js`/`.cjs`), PHP (`.php`), C# (`.cs`), SQL (`.sql`), and YAML
+  (`.yaml`/`.yml`).
 
 ## Layout
 

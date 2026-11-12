@@ -28,6 +28,78 @@ static const char *s_keywords[] =
 	"NULL", "true", "false"
 };
 
+static const char *s_keywords_js[] =
+{
+	"async", "await", "break", "case", "catch", "class", "const", "continue",
+	"debugger", "default", "delete", "do", "else", "export", "extends",
+	"finally", "for", "from", "function", "if", "import", "in", "instanceof",
+	"let", "new", "of", "return", "static", "super", "switch", "this",
+	"throw", "try", "typeof", "var", "void", "while", "with", "yield",
+	"enum", "implements", "interface", "package", "private", "protected",
+	"public", "as", "null", "true", "false", "undefined", "NaN", "Infinity"
+};
+
+static const char *s_keywords_php[] =
+{
+	"array", "as", "bool", "break", "callable", "case", "catch", "class",
+	"clone", "const", "continue", "declare", "default", "die", "do",
+	"echo", "else", "elseif", "empty", "enddeclare", "endfor", "endforeach",
+	"endif", "endswitch", "endwhile", "eval", "exit", "extends", "false",
+	"final", "finally", "fn", "for", "foreach", "function", "global",
+	"goto", "if", "implements", "include", "include_once", "instanceof",
+	"insteadof", "interface", "isset", "iterable", "list", "match",
+	"mixed", "namespace", "new", "null", "object", "print", "private",
+	"protected", "public", "readonly", "require", "require_once", "return",
+	"static", "string", "switch", "throw", "trait", "true", "try",
+	"use", "var", "while", "xor", "yield", "int", "float", "void",
+	"php", "and", "or"
+};
+
+static const char *s_keywords_cs[] =
+{
+	"abstract", "as", "async", "await", "base", "bool", "break", "byte",
+	"case", "catch", "char", "checked", "class", "const", "continue",
+	"decimal", "default", "delegate", "do", "double", "dynamic", "else",
+	"enum", "event", "explicit", "extern", "false", "finally", "fixed",
+	"float", "for", "foreach", "from", "get", "global", "goto", "group",
+	"if", "implicit", "in", "int", "interface", "internal", "into", "is",
+	"join", "let", "lock", "long", "namespace", "new", "null", "object",
+	"operator", "orderby", "out", "override", "params", "private",
+	"protected", "public", "readonly", "ref", "return", "sbyte", "sealed",
+	"select", "set", "short", "sizeof", "stackalloc", "static", "string",
+	"struct", "switch", "this", "throw", "true", "try", "typeof", "uint",
+	"ulong", "unchecked", "unsafe", "ushort", "using", "value", "var",
+	"virtual", "void", "volatile", "where", "while"
+};
+
+static const char *s_keywords_sql[] =
+{
+	"ADD", "ALL", "ALTER", "AND", "AS", "ASC", "BEGIN", "BETWEEN", "BIGINT",
+	"BLOB", "BOOLEAN", "BY", "CASCADE", "CASE", "CAST", "CHAR", "CHECK",
+	"COMMIT", "CONSTRAINT", "CREATE", "CROSS", "CURRENT", "DATE", "DECIMAL",
+	"DECLARE", "DEFAULT", "DELETE", "DESC", "DISTINCT", "DOUBLE", "DROP",
+	"ELSE", "END", "EXCEPT", "EXISTS", "EXTRACT", "FETCH", "FLOAT",
+	"FOLLOWING", "FOR", "FOREIGN", "FROM", "FULL", "FUNCTION", "GRANT",
+	"GROUP", "HAVING", "IF", "IN", "INDEX", "INNER", "INSERT", "INT",
+	"INTEGER", "INTERSECT", "INTO", "IS", "JOIN", "KEY", "LEFT", "LIKE",
+	"ILIKE", "LIMIT", "LOOP", "NOT", "NULL", "NUMERIC", "OFFSET", "ON",
+	"ORDER", "OUTER", "OVER", "PARTITION", "PRECEDING", "PRIMARY",
+	"PROCEDURE", "RANGE", "REAL", "RECURSIVE", "REFERENCES", "RETURN",
+	"RETURNS", "REVOKE", "RIGHT", "ROLLBACK", "ROW", "ROWS", "SELECT",
+	"SET", "SMALLINT", "TABLE", "TEXT", "THEN", "TIME", "TIMESTAMP",
+	"TOP", "TRANSACTION", "TRIGGER", "TRUE", "FALSE", "UNBOUNDED",
+	"UNION", "UNIQUE", "UNKNOWN", "UPDATE", "USING", "VALUES", "VARCHAR",
+	"VIEW", "WHEN", "WHERE", "WHILE", "WITH", "PRECISION", "RESTRICT",
+	"ACTION", "NO", "INTERVAL"
+};
+
+static const char *s_keywords_yaml[] =
+{
+	"true", "True", "TRUE", "false", "False", "FALSE", "null", "Null",
+	"NULL", "yes", "Yes", "YES", "no", "No", "NO", "on", "On", "ON",
+	"off", "Off", "OFF"
+};
+
 static unsigned char *s_scratch;
 static size_t s_scratch_cap;
 static int s_color;
@@ -57,13 +129,18 @@ static int is_word_continue(int c)
 	return c >= '0' && c <= '9';
 }
 
-static int is_keyword(const char *word, size_t len)
+static int is_keyword_in(const char *word, size_t len, const char **table, size_t n)
 {
 	size_t i;
 
-	for(i = 0; i < sizeof(s_keywords) / sizeof(s_keywords[0]); i++)
+	if(word == NULL || table == NULL)
 	{
-		if(strlen(s_keywords[i]) == len && memcmp(s_keywords[i], word, len) == 0)
+		return 0;
+	}
+
+	for(i = 0; i < n; i++)
+	{
+		if(strlen(table[i]) == len && memcmp(table[i], word, len) == 0)
 		{
 			return 1;
 		}
@@ -71,6 +148,58 @@ static int is_keyword(const char *word, size_t len)
 
 	return 0;
 }
+
+static int hl_lower(int c)
+{
+	if(c >= 'A' && c <= 'Z')
+	{
+		return c + ('a' - 'A');
+	}
+
+	return c;
+}
+
+static int is_keyword_ci_in(const char *word, size_t len, const char **table, size_t n)
+{
+	size_t i;
+
+	if(word == NULL || table == NULL)
+	{
+		return 0;
+	}
+
+	for(i = 0; i < n; i++)
+	{
+		size_t k;
+
+		if(strlen(table[i]) != len)
+		{
+			continue;
+		}
+
+		for(k = 0; k < len; k++)
+		{
+			if(hl_lower((unsigned char)word[k]) != hl_lower((unsigned char)table[i][k]))
+			{
+				break;
+			}
+		}
+
+		if(k == len)
+		{
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
+/* Option bits for scan_c_like_line(). */
+#define SCAN_HASH_COMMENT 1
+#define SCAN_DOLLAR_VAR 2
+#define SCAN_BACKTICK_STRING 4
+#define SCAN_PHP_TAGS 8
+#define SCAN_CS_VERBATIM 16
 
 static void grow_state(Buffer *b, size_t needed)
 {
@@ -117,10 +246,15 @@ static void grow_scratch(size_t needed)
 	s_scratch_cap = needed;
 }
 
-static int scan_c_line(const char *data, size_t len, int in_comment, unsigned char *out)
+static int scan_c_like_line(const char *data, size_t len, int in_comment, unsigned char *out, const char **keywords, size_t nkeywords, int keyword_ci, int flags)
 {
 	size_t first;
 	size_t i;
+
+	if(data == NULL || out == NULL)
+	{
+		return in_comment;
+	}
 
 	first = 0;
 
@@ -166,12 +300,52 @@ static int scan_c_line(const char *data, size_t len, int in_comment, unsigned ch
 			continue;
 		}
 
+		if(i == first && data[i] == '#' && i + 1 < len && data[i + 1] == '!')
+		{
+			memset(&out[i], HL_COMMENT, len - i);
+			break;
+		}
+
+		if((flags & SCAN_HASH_COMMENT) != 0 && data[i] == '#')
+		{
+			memset(&out[i], HL_COMMENT, len - i);
+			break;
+		}
+
 		if(data[i] == '"')
 		{
 			out[i] = (unsigned char)HL_STRING;
 			i++;
 
 			while(i < len && data[i] != '"')
+			{
+				out[i] = (unsigned char)HL_STRING;
+
+				if(data[i] == '\\' && i + 1 < len)
+				{
+					out[i + 1] = (unsigned char)HL_STRING;
+					i += 2;
+					continue;
+				}
+
+				i++;
+			}
+
+			if(i < len)
+			{
+				out[i] = (unsigned char)HL_STRING;
+				i++;
+			}
+
+			continue;
+		}
+
+		if((flags & SCAN_BACKTICK_STRING) != 0 && data[i] == '`')
+		{
+			out[i] = (unsigned char)HL_STRING;
+			i++;
+
+			while(i < len && data[i] != '`')
 			{
 				out[i] = (unsigned char)HL_STRING;
 
@@ -222,6 +396,134 @@ static int scan_c_line(const char *data, size_t len, int in_comment, unsigned ch
 			continue;
 		}
 
+		if((flags & SCAN_CS_VERBATIM) != 0)
+		{
+			if(data[i] == '$' && i + 2 < len && data[i + 1] == '@' && data[i + 2] == '"')
+			{
+				out[i] = (unsigned char)HL_STRING;
+				out[i + 1] = (unsigned char)HL_STRING;
+				out[i + 2] = (unsigned char)HL_STRING;
+				i += 3;
+
+				while(i < len)
+				{
+					if(data[i] == '"' && i + 1 < len && data[i + 1] == '"')
+					{
+						out[i] = (unsigned char)HL_STRING;
+						out[i + 1] = (unsigned char)HL_STRING;
+						i += 2;
+						continue;
+					}
+
+					if(data[i] == '"')
+					{
+						out[i] = (unsigned char)HL_STRING;
+						i++;
+						break;
+					}
+
+					out[i] = (unsigned char)HL_STRING;
+					i++;
+				}
+
+				continue;
+			}
+
+			if(data[i] == '@' && i + 2 < len && data[i + 1] == '$' && data[i + 2] == '"')
+			{
+				out[i] = (unsigned char)HL_STRING;
+				out[i + 1] = (unsigned char)HL_STRING;
+				out[i + 2] = (unsigned char)HL_STRING;
+				i += 3;
+
+				while(i < len)
+				{
+					if(data[i] == '"' && i + 1 < len && data[i + 1] == '"')
+					{
+						out[i] = (unsigned char)HL_STRING;
+						out[i + 1] = (unsigned char)HL_STRING;
+						i += 2;
+						continue;
+					}
+
+					if(data[i] == '"')
+					{
+						out[i] = (unsigned char)HL_STRING;
+						i++;
+						break;
+					}
+
+					out[i] = (unsigned char)HL_STRING;
+					i++;
+				}
+
+				continue;
+			}
+
+			if(data[i] == '@' && i + 1 < len && data[i + 1] == '"')
+			{
+				out[i] = (unsigned char)HL_STRING;
+				out[i + 1] = (unsigned char)HL_STRING;
+				i += 2;
+
+				while(i < len)
+				{
+					if(data[i] == '"' && i + 1 < len && data[i + 1] == '"')
+					{
+						out[i] = (unsigned char)HL_STRING;
+						out[i + 1] = (unsigned char)HL_STRING;
+						i += 2;
+						continue;
+					}
+
+					if(data[i] == '"')
+					{
+						out[i] = (unsigned char)HL_STRING;
+						i++;
+						break;
+					}
+
+					out[i] = (unsigned char)HL_STRING;
+					i++;
+				}
+
+				continue;
+			}
+
+			if(data[i] == '$' && i + 1 < len && data[i + 1] == '"')
+			{
+				out[i] = (unsigned char)HL_STRING;
+				i++;
+				continue;
+			}
+		}
+
+		if((flags & SCAN_PHP_TAGS) != 0)
+		{
+			if(data[i] == '<' && i + 1 < len && data[i + 1] == '?')
+			{
+				out[i] = (unsigned char)HL_PREPROC;
+				out[i + 1] = (unsigned char)HL_PREPROC;
+				i += 2;
+
+				if(i < len && data[i] == '=')
+				{
+					out[i] = (unsigned char)HL_PREPROC;
+					i++;
+				}
+
+				continue;
+			}
+
+			if(data[i] == '?' && i + 1 < len && data[i + 1] == '>')
+			{
+				out[i] = (unsigned char)HL_PREPROC;
+				out[i + 1] = (unsigned char)HL_PREPROC;
+				i += 2;
+				continue;
+			}
+		}
+
 		if(i == first && data[i] == '#')
 		{
 			out[i] = (unsigned char)HL_PREPROC;
@@ -260,7 +562,205 @@ static int scan_c_line(const char *data, size_t len, int in_comment, unsigned ch
 
 			cls = HL_NORMAL;
 
-			if(is_keyword(&data[i], j - i))
+			if(keyword_ci != 0)
+			{
+				if(is_keyword_ci_in(&data[i], j - i, keywords, nkeywords) != 0)
+				{
+					cls = HL_KEYWORD;
+				}
+			}
+			else if(is_keyword_in(&data[i], j - i, keywords, nkeywords) != 0)
+			{
+				cls = HL_KEYWORD;
+			}
+
+			memset(&out[i], (int)cls, j - i);
+			i = j;
+			continue;
+		}
+
+		if((flags & SCAN_DOLLAR_VAR) != 0 && data[i] == '$' && i + 1 < len && is_alpha_underscore((unsigned char)data[i + 1]) != 0)
+		{
+			out[i] = (unsigned char)HL_NUMBER;
+			i++;
+
+			while(i < len && is_word_continue((unsigned char)data[i]) != 0)
+			{
+				out[i] = (unsigned char)HL_NUMBER;
+				i++;
+			}
+
+			continue;
+		}
+
+		out[i] = (unsigned char)HL_NORMAL;
+		i++;
+	}
+
+	return in_comment;
+}
+
+static int scan_c_line(const char *data, size_t len, int in_comment, unsigned char *out)
+{
+	return scan_c_like_line(data, len, in_comment, out, s_keywords, sizeof(s_keywords) / sizeof(s_keywords[0]), 0, 0);
+}
+
+static int scan_js_line(const char *data, size_t len, int in_comment, unsigned char *out)
+{
+	return scan_c_like_line(data, len, in_comment, out, s_keywords_js, sizeof(s_keywords_js) / sizeof(s_keywords_js[0]), 0, SCAN_BACKTICK_STRING);
+}
+
+static int scan_php_line(const char *data, size_t len, int in_comment, unsigned char *out)
+{
+	return scan_c_like_line(data, len, in_comment, out, s_keywords_php, sizeof(s_keywords_php) / sizeof(s_keywords_php[0]), 1, SCAN_HASH_COMMENT | SCAN_DOLLAR_VAR | SCAN_BACKTICK_STRING | SCAN_PHP_TAGS);
+}
+
+static int scan_cs_line(const char *data, size_t len, int in_comment, unsigned char *out)
+{
+	return scan_c_like_line(data, len, in_comment, out, s_keywords_cs, sizeof(s_keywords_cs) / sizeof(s_keywords_cs[0]), 0, SCAN_CS_VERBATIM);
+}
+
+static int scan_sql_line(const char *data, size_t len, int in_comment, unsigned char *out)
+{
+	size_t i;
+
+	if(data == NULL || out == NULL)
+	{
+		return in_comment;
+	}
+
+	i = 0;
+
+	while(i < len)
+	{
+		size_t j;
+
+		if(in_comment != 0)
+		{
+			if(data[i] == '*' && i + 1 < len && data[i + 1] == '/')
+			{
+				out[i] = (unsigned char)HL_COMMENT;
+				out[i + 1] = (unsigned char)HL_COMMENT;
+				i += 2;
+				in_comment = 0;
+				continue;
+			}
+
+			out[i] = (unsigned char)HL_COMMENT;
+			i++;
+			continue;
+		}
+
+		if(data[i] == '-' && i + 1 < len && data[i + 1] == '-')
+		{
+			memset(&out[i], HL_COMMENT, len - i);
+			break;
+		}
+
+		if(data[i] == '/' && i + 1 < len && data[i + 1] == '*')
+		{
+			out[i] = (unsigned char)HL_COMMENT;
+			out[i + 1] = (unsigned char)HL_COMMENT;
+			i += 2;
+			in_comment = 1;
+			continue;
+		}
+
+		if(data[i] == '\'')
+		{
+			out[i] = (unsigned char)HL_STRING;
+			i++;
+
+			while(i < len && data[i] != '\'')
+			{
+				out[i] = (unsigned char)HL_STRING;
+
+				if(data[i] == '\'' && i + 1 < len && data[i + 1] == '\'')
+				{
+					out[i + 1] = (unsigned char)HL_STRING;
+					i += 2;
+					continue;
+				}
+
+				if(data[i] == '\\' && i + 1 < len)
+				{
+					out[i + 1] = (unsigned char)HL_STRING;
+					i += 2;
+					continue;
+				}
+
+				i++;
+			}
+
+			if(i < len)
+			{
+				out[i] = (unsigned char)HL_STRING;
+				i++;
+			}
+
+			continue;
+		}
+
+		if(data[i] == '"')
+		{
+			out[i] = (unsigned char)HL_STRING;
+			i++;
+
+			while(i < len && data[i] != '"')
+			{
+				out[i] = (unsigned char)HL_STRING;
+
+				if(data[i] == '"' && i + 1 < len && data[i + 1] == '"')
+				{
+					out[i + 1] = (unsigned char)HL_STRING;
+					i += 2;
+					continue;
+				}
+
+				if(data[i] == '\\' && i + 1 < len)
+				{
+					out[i + 1] = (unsigned char)HL_STRING;
+					i += 2;
+					continue;
+				}
+
+				i++;
+			}
+
+			if(i < len)
+			{
+				out[i] = (unsigned char)HL_STRING;
+				i++;
+			}
+
+			continue;
+		}
+
+		if(data[i] >= '0' && data[i] <= '9')
+		{
+			while(i < len && (is_word_continue((unsigned char)data[i]) || data[i] == '.'))
+			{
+				out[i] = (unsigned char)HL_NUMBER;
+				i++;
+			}
+
+			continue;
+		}
+
+		if(is_alpha_underscore((unsigned char)data[i]))
+		{
+			HlClass cls;
+
+			j = i;
+
+			while(j < len && is_word_continue((unsigned char)data[j]))
+			{
+				j++;
+			}
+
+			cls = HL_NORMAL;
+
+			if(is_keyword_ci_in(&data[i], j - i, s_keywords_sql, sizeof(s_keywords_sql) / sizeof(s_keywords_sql[0])) != 0)
 			{
 				cls = HL_KEYWORD;
 			}
@@ -275,6 +775,240 @@ static int scan_c_line(const char *data, size_t len, int in_comment, unsigned ch
 	}
 
 	return in_comment;
+}
+
+static int scan_yaml_line(const char *data, size_t len, int in_span, unsigned char *out)
+{
+	size_t lead;
+	size_t i;
+
+	(void)in_span;
+
+	if(data == NULL || out == NULL)
+	{
+		return 0;
+	}
+
+	if(len == 0)
+	{
+		return 0;
+	}
+
+	lead = 0;
+
+	while(lead < len && (data[lead] == ' ' || data[lead] == '\t'))
+	{
+		lead++;
+	}
+
+	for(i = 0; i < lead; i++)
+	{
+		out[i] = (unsigned char)HL_NORMAL;
+	}
+
+	if(lead < len && data[lead] == '#')
+	{
+		memset(&out[lead], HL_COMMENT, len - lead);
+		return 0;
+	}
+
+	if(lead + 3 <= len && (memcmp(&data[lead], "---", 3) == 0 || memcmp(&data[lead], "...", 3) == 0))
+	{
+		size_t k;
+
+		k = lead + 3;
+
+		if(k >= len || data[k] == ' ' || data[k] == '\t')
+		{
+			memset(&out[lead], HL_PREPROC, len - lead);
+			return 0;
+		}
+	}
+
+	i = lead;
+
+	if(i < len && (data[i] == '-' || data[i] == '?') && i + 1 < len && (data[i + 1] == ' ' || data[i + 1] == '\t'))
+	{
+		out[i] = (unsigned char)HL_PREPROC;
+		i++;
+
+		while(i < len && (data[i] == ' ' || data[i] == '\t'))
+		{
+			out[i] = (unsigned char)HL_NORMAL;
+			i++;
+		}
+	}
+
+	while(i < len)
+	{
+		size_t j;
+
+		if(data[i] == '#' && (i == 0 || data[i - 1] == ' ' || data[i - 1] == '\t'))
+		{
+			memset(&out[i], HL_COMMENT, len - i);
+			break;
+		}
+
+		if(data[i] == '"')
+		{
+			out[i] = (unsigned char)HL_STRING;
+			i++;
+
+			while(i < len && data[i] != '"')
+			{
+				out[i] = (unsigned char)HL_STRING;
+
+				if(data[i] == '\\' && i + 1 < len)
+				{
+					out[i + 1] = (unsigned char)HL_STRING;
+					i += 2;
+					continue;
+				}
+
+				i++;
+			}
+
+			if(i < len)
+			{
+				out[i] = (unsigned char)HL_STRING;
+				i++;
+			}
+
+			continue;
+		}
+
+		if(data[i] == '\'')
+		{
+			out[i] = (unsigned char)HL_STRING;
+			i++;
+
+			while(i < len && data[i] != '\'')
+			{
+				out[i] = (unsigned char)HL_STRING;
+
+				if(data[i] == '\'' && i + 1 < len && data[i + 1] == '\'')
+				{
+					out[i + 1] = (unsigned char)HL_STRING;
+					i += 2;
+					continue;
+				}
+
+				i++;
+			}
+
+			if(i < len)
+			{
+				out[i] = (unsigned char)HL_STRING;
+				i++;
+			}
+
+			continue;
+		}
+
+		if(data[i] == '&' || data[i] == '*' || data[i] == '!')
+		{
+			out[i] = (unsigned char)HL_PREPROC;
+			i++;
+
+			while(i < len && (is_word_continue((unsigned char)data[i]) != 0 || data[i] == '-' || data[i] == '.' || data[i] == '/'))
+			{
+				out[i] = (unsigned char)HL_PREPROC;
+				i++;
+			}
+
+			continue;
+		}
+
+		if((data[i] == '|' || data[i] == '>') && (i == 0 || data[i - 1] == ' ' || data[i - 1] == '\t' || data[i - 1] == ':'))
+		{
+			size_t k;
+
+			k = i + 1;
+
+			if(k < len && (data[k] == '+' || data[k] == '-'))
+			{
+				k++;
+			}
+
+			while(k < len && data[k] >= '0' && data[k] <= '9')
+			{
+				k++;
+			}
+
+			if(k >= len || data[k] == ' ' || data[k] == '\t' || data[k] == '#')
+			{
+				while(i < k)
+				{
+					out[i] = (unsigned char)HL_PREPROC;
+					i++;
+				}
+
+				continue;
+			}
+		}
+
+		if(data[i] == '~' && (i + 1 >= len || data[i + 1] == ' ' || data[i + 1] == '\t' || data[i + 1] == '#'))
+		{
+			out[i] = (unsigned char)HL_KEYWORD;
+			i++;
+			continue;
+		}
+
+		if(data[i] >= '0' && data[i] <= '9')
+		{
+			while(i < len && (is_word_continue((unsigned char)data[i]) != 0 || data[i] == '.' || data[i] == '-' || data[i] == ':' || data[i] == '+'))
+			{
+				out[i] = (unsigned char)HL_NUMBER;
+				i++;
+			}
+
+			continue;
+		}
+
+		if(is_alpha_underscore((unsigned char)data[i]) != 0)
+		{
+			HlClass cls;
+
+			j = i;
+
+			while(j < len && is_word_continue((unsigned char)data[j]) != 0)
+			{
+				j++;
+			}
+
+			cls = HL_NORMAL;
+
+			if(is_keyword_in(&data[i], j - i, s_keywords_yaml, sizeof(s_keywords_yaml) / sizeof(s_keywords_yaml[0])) != 0)
+			{
+				cls = HL_KEYWORD;
+			}
+			else
+			{
+				size_t k;
+
+				k = j;
+
+				while(k < len && (data[k] == ' ' || data[k] == '\t'))
+				{
+					k++;
+				}
+
+				if(k < len && data[k] == ':')
+				{
+					cls = HL_KEYWORD;
+				}
+			}
+
+			memset(&out[i], (int)cls, j - i);
+			i = j;
+			continue;
+		}
+
+		out[i] = (unsigned char)HL_NORMAL;
+		i++;
+	}
+
+	return 0;
 }
 
 static int is_md_fence(const char *data, size_t len)
@@ -638,6 +1372,48 @@ void highlight_set_filetype(Buffer *b)
 		return;
 	}
 
+	if(len >= 4 && strcmp(&b->filename[len - 4], ".cjs") == 0)
+	{
+		b->filetype = HL_JS;
+		return;
+	}
+
+	if(len >= 4 && strcmp(&b->filename[len - 4], ".sql") == 0)
+	{
+		b->filetype = HL_SQL;
+		return;
+	}
+
+	if(len >= 4 && strcmp(&b->filename[len - 4], ".php") == 0)
+	{
+		b->filetype = HL_PHP;
+		return;
+	}
+
+	if(len >= 4 && strcmp(&b->filename[len - 4], ".yml") == 0)
+	{
+		b->filetype = HL_YAML;
+		return;
+	}
+
+	if(len >= 5 && strcmp(&b->filename[len - 5], ".yaml") == 0)
+	{
+		b->filetype = HL_YAML;
+		return;
+	}
+
+	if(len >= 3 && strcmp(&b->filename[len - 3], ".js") == 0)
+	{
+		b->filetype = HL_JS;
+		return;
+	}
+
+	if(len >= 3 && strcmp(&b->filename[len - 3], ".cs") == 0)
+	{
+		b->filetype = HL_CS;
+		return;
+	}
+
 	if(len < 2)
 	{
 		return;
@@ -681,7 +1457,7 @@ void highlight_ensure(Buffer *b)
 
 	b->hl.dirty = 0;
 
-	if(b->filetype != HL_C && b->filetype != HL_MD)
+	if(b->filetype == HL_PLAIN)
 	{
 		return;
 	}
@@ -706,6 +1482,26 @@ void highlight_ensure(Buffer *b)
 		if(b->filetype == HL_MD)
 		{
 			in_span = scan_md_line(line->data, line->len, in_span, s_scratch);
+		}
+		else if(b->filetype == HL_JS)
+		{
+			in_span = scan_js_line(line->data, line->len, in_span, s_scratch);
+		}
+		else if(b->filetype == HL_PHP)
+		{
+			in_span = scan_php_line(line->data, line->len, in_span, s_scratch);
+		}
+		else if(b->filetype == HL_CS)
+		{
+			in_span = scan_cs_line(line->data, line->len, in_span, s_scratch);
+		}
+		else if(b->filetype == HL_SQL)
+		{
+			in_span = scan_sql_line(line->data, line->len, in_span, s_scratch);
+		}
+		else if(b->filetype == HL_YAML)
+		{
+			in_span = scan_yaml_line(line->data, line->len, in_span, s_scratch);
 		}
 		else
 		{
@@ -916,7 +1712,7 @@ const unsigned char *highlight_classes(Buffer *b, size_t row)
 		return NULL;
 	}
 
-	if(b->filetype != HL_C && b->filetype != HL_MD)
+	if(b->filetype == HL_PLAIN)
 	{
 		return NULL;
 	}
@@ -945,6 +1741,26 @@ const unsigned char *highlight_classes(Buffer *b, size_t row)
 	if(b->filetype == HL_MD)
 	{
 		scan_md_line(line->data, line->len, start_in, s_scratch);
+	}
+	else if(b->filetype == HL_JS)
+	{
+		scan_js_line(line->data, line->len, start_in, s_scratch);
+	}
+	else if(b->filetype == HL_PHP)
+	{
+		scan_php_line(line->data, line->len, start_in, s_scratch);
+	}
+	else if(b->filetype == HL_CS)
+	{
+		scan_cs_line(line->data, line->len, start_in, s_scratch);
+	}
+	else if(b->filetype == HL_SQL)
+	{
+		scan_sql_line(line->data, line->len, start_in, s_scratch);
+	}
+	else if(b->filetype == HL_YAML)
+	{
+		scan_yaml_line(line->data, line->len, start_in, s_scratch);
 	}
 	else
 	{
