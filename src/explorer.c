@@ -545,6 +545,41 @@ static void explorer_set_status(void)
 	editor_set_status(msg);
 }
 
+/* True when cwd is the filesystem root under any spelling ("/", ".",
+"..", "../.." ...). String comparison alone misses relative spellings,
+so compare the directory against its own parent: at the root they are
+the same inode on the same device. Fail-open (return 0) so an
+unstatable directory still offers the parent row and surfaces the
+normal "Cannot open directory" path. */
+static int explorer_at_filesystem_root(void)
+{
+	char up[FILENAME_LIMIT];
+	struct stat here;
+	struct stat above;
+
+	if(strcmp(s_explorer.cwd, "/") == 0)
+	{
+		return 1;
+	}
+
+	if(stat(s_explorer.cwd, &here) != 0)
+	{
+		return 0;
+	}
+
+	if(snprintf(up, sizeof(up), "%s/..", s_explorer.cwd) >= (int)sizeof(up))
+	{
+		return 0;
+	}
+
+	if(stat(up, &above) != 0)
+	{
+		return 0;
+	}
+
+	return here.st_ino == above.st_ino && here.st_dev == above.st_dev;
+}
+
 static void explorer_rescan(void)
 {
 	int n;
@@ -554,7 +589,7 @@ static void explorer_rescan(void)
 	s_explorer.total = 0;
 	s_explorer.truncated = 0;
 
-	if(strcmp(s_explorer.cwd, "/") != 0)
+	if(explorer_at_filesystem_root() == 0)
 	{
 		snprintf(s_explorer.names[0], sizeof(s_explorer.names[0]), "../");
 		snprintf(s_explorer.paths[0], sizeof(s_explorer.paths[0]), "%s", s_explorer.cwd);
@@ -798,7 +833,7 @@ static void explorer_parent(void)
 	size_t len;
 	size_t i;
 
-	if(strcmp(s_explorer.cwd, "/") == 0)
+	if(explorer_at_filesystem_root() != 0)
 	{
 		return;
 	}
