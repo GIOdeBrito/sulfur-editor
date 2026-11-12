@@ -28,6 +28,8 @@
 #define EXPLORER_TITLE_ROW 0
 #define EXPLORER_QUERY_ROW 1
 #define EXPLORER_LIST_TOP 2
+#define EXPLORER_SEARCH_MAX_DEPTH 16
+#define EXPLORER_SEARCH_MAX_STACK 256
 
 typedef struct
 {
@@ -48,6 +50,17 @@ typedef struct
 } Explorer;
 
 static Explorer s_explorer;
+
+static char s_search_names[EXPLORER_MAX_ENTRIES][EXPLORER_NAME_LIMIT];
+static char s_search_paths[EXPLORER_MAX_ENTRIES][FILENAME_LIMIT];
+static int s_search_is_dir[EXPLORER_MAX_ENTRIES];
+static int s_search_depth[EXPLORER_MAX_ENTRIES];
+static int s_search_expanded[EXPLORER_MAX_ENTRIES];
+static int s_search_total;
+static int s_search_truncated;
+static char s_search_stack[EXPLORER_SEARCH_MAX_STACK][FILENAME_LIMIT];
+static int s_search_stack_depth[EXPLORER_SEARCH_MAX_STACK];
+static int s_search_stack_top;
 
 static struct
 {
@@ -92,6 +105,392 @@ static int explorer_fuzzy_match(const char *query, const char *name)
 	}
 
 	return 1;
+}
+
+static int explorer_in_search(void)
+{
+	return s_explorer.query[0] != '\0';
+}
+
+static const char *explorer_entry_name(int idx)
+{
+	if(explorer_in_search() != 0)
+	{
+		if(idx < 0 || idx >= s_search_total)
+		{
+			return "";
+		}
+
+		return s_search_names[idx];
+	}
+
+	if(idx < 0 || idx >= s_explorer.total)
+	{
+		return "";
+	}
+
+	return s_explorer.names[idx];
+}
+
+static const char *explorer_entry_path(int idx)
+{
+	if(explorer_in_search() != 0)
+	{
+		if(idx < 0 || idx >= s_search_total)
+		{
+			return "";
+		}
+
+		return s_search_paths[idx];
+	}
+
+	if(idx < 0 || idx >= s_explorer.total)
+	{
+		return "";
+	}
+
+	return s_explorer.paths[idx];
+}
+
+static int explorer_entry_is_dir(int idx)
+{
+	if(explorer_in_search() != 0)
+	{
+		if(idx < 0 || idx >= s_search_total)
+		{
+			return 0;
+		}
+
+		return s_search_is_dir[idx];
+	}
+
+	if(idx < 0 || idx >= s_explorer.total)
+	{
+		return 0;
+	}
+
+	return s_explorer.is_dir[idx];
+}
+
+static int explorer_entry_depth(int idx)
+{
+	if(explorer_in_search() != 0)
+	{
+		if(idx < 0 || idx >= s_search_total)
+		{
+			return 0;
+		}
+
+		return s_search_depth[idx];
+	}
+
+	if(idx < 0 || idx >= s_explorer.total)
+	{
+		return 0;
+	}
+
+	return s_explorer.depth[idx];
+}
+
+static int explorer_entry_expanded(int idx)
+{
+	if(explorer_in_search() != 0)
+	{
+		if(idx < 0 || idx >= s_search_total)
+		{
+			return 0;
+		}
+
+		return s_search_expanded[idx];
+	}
+
+	if(idx < 0 || idx >= s_explorer.total)
+	{
+		return 0;
+	}
+
+	return s_explorer.expanded[idx];
+}
+
+static int explorer_entry_is_parent(int idx)
+{
+	if(explorer_in_search() != 0)
+	{
+		return 0;
+	}
+
+	if(idx < 0 || idx >= s_explorer.total)
+	{
+		return 0;
+	}
+
+	return strcmp(s_explorer.names[idx], "../") == 0;
+}
+
+static int explorer_search_matches(const char *name, const char *path)
+{
+	if(name == NULL || path == NULL)
+	{
+		return 0;
+	}
+
+	if(s_explorer.query[0] == '\0')
+	{
+		return 0;
+	}
+
+	if(explorer_fuzzy_match(s_explorer.query, name) != 0)
+	{
+		return 1;
+	}
+
+	if(explorer_fuzzy_match(s_explorer.query, path) != 0)
+	{
+		return 1;
+	}
+
+	return 0;
+}
+
+static int explorer_search_find_path(const char *path)
+{
+	int i;
+
+	if(path == NULL)
+	{
+		return -1;
+	}
+
+	for(i = 0; i < s_search_total; i++)
+	{
+		if(strcmp(s_search_paths[i], path) == 0)
+		{
+			return i;
+		}
+	}
+
+	return -1;
+}
+
+static int explorer_search_add(const char *name, const char *path, int is_dir, int depth)
+{
+	if(name == NULL || path == NULL)
+	{
+		return -1;
+	}
+
+	if(depth < 0 || depth >= EXPLORER_SEARCH_MAX_DEPTH)
+	{
+		s_search_truncated = 1;
+		return -1;
+	}
+
+	if(s_search_total >= EXPLORER_MAX_ENTRIES)
+	{
+		s_search_truncated = 1;
+		return -1;
+	}
+
+	if(snprintf(s_search_paths[s_search_total], sizeof(s_search_paths[0]), "%s", path) >= (int)sizeof(s_search_paths[0]))
+	{
+		s_search_truncated = 1;
+		return -1;
+	}
+
+	snprintf(s_search_names[s_search_total], sizeof(s_search_names[0]), "%s", name);
+	s_search_is_dir[s_search_total] = (is_dir != 0);
+	s_search_depth[s_search_total] = depth;
+	s_search_expanded[s_search_total] = 0;
+	s_search_total++;
+
+	return s_search_total - 1;
+}
+
+/* Ensure every ancestor dir of a deep-search hit (cwd-exclusive) exists in
+the search table so hits render with their whole tree path instead of a
+flat list. Missing ancestors are appended (order is fixed by the later
+tree sort); existing ones are marked expanded since they now show a child. */
+static void explorer_search_ensure_ancestors(const char *match_path, int match_depth)
+{
+	char rel[FILENAME_LIMIT];
+	char comps[EXPLORER_SEARCH_MAX_DEPTH][EXPLORER_NAME_LIMIT];
+	const char *cwd;
+	size_t cwd_len;
+	const char *rest;
+	size_t pos;
+	int ncomps;
+	int k;
+
+	if(match_path == NULL)
+	{
+		return;
+	}
+
+	if(match_depth <= 0)
+	{
+		return;
+	}
+
+	if(match_depth >= EXPLORER_SEARCH_MAX_DEPTH)
+	{
+		s_search_truncated = 1;
+		return;
+	}
+
+	cwd = s_explorer.cwd;
+	cwd_len = strlen(cwd);
+
+	if(strncmp(match_path, cwd, cwd_len) != 0)
+	{
+		return;
+	}
+
+	rest = match_path + cwd_len;
+
+	if(rest[0] == '/')
+	{
+		rest++;
+	}
+
+	if(rest[0] == '\0')
+	{
+		return;
+	}
+
+	if(snprintf(rel, sizeof(rel), "%s", rest) >= (int)sizeof(rel))
+	{
+		s_search_truncated = 1;
+		return;
+	}
+
+	ncomps = 0;
+	pos = 0;
+
+	while(rel[pos] != '\0' && ncomps <= match_depth)
+	{
+		size_t start;
+		size_t len;
+
+		start = pos;
+
+		while(rel[pos] != '\0' && rel[pos] != '/')
+		{
+			pos++;
+		}
+
+		len = pos - start;
+
+		if(len == 0 || len + 2 > sizeof(comps[0]))
+		{
+			if(rel[pos] == '/')
+			{
+				pos++;
+			}
+
+			continue;
+		}
+
+		memcpy(comps[ncomps], &rel[start], len);
+		comps[ncomps][len] = '\0';
+		ncomps++;
+
+		if(rel[pos] == '/')
+		{
+			pos++;
+		}
+	}
+
+	if(ncomps != match_depth + 1)
+	{
+		return;
+	}
+
+	for(k = 0; k < match_depth; k++)
+	{
+		char apath[FILENAME_LIMIT];
+		char aname[EXPLORER_NAME_LIMIT];
+		size_t off;
+		int c;
+		int found;
+
+		off = 0;
+
+		if(strcmp(cwd, "/") == 0)
+		{
+			apath[0] = '/';
+			off = 1;
+		}
+		else
+		{
+			size_t need;
+
+			need = cwd_len + 1;
+
+			if(need >= sizeof(apath))
+			{
+				s_search_truncated = 1;
+				return;
+			}
+
+			memcpy(apath, cwd, cwd_len);
+			off = cwd_len;
+			apath[off++] = '/';
+		}
+
+		for(c = 0; c <= k; c++)
+		{
+			size_t clen;
+
+			clen = strlen(comps[c]);
+
+			if(c > 0)
+			{
+				if(off + 1 >= sizeof(apath))
+				{
+					s_search_truncated = 1;
+					return;
+				}
+
+				apath[off++] = '/';
+			}
+
+			if(off + clen >= sizeof(apath))
+			{
+				s_search_truncated = 1;
+				return;
+			}
+
+			memcpy(&apath[off], comps[c], clen);
+			off += clen;
+		}
+
+		apath[off] = '\0';
+
+		if(snprintf(aname, sizeof(aname), "%s/", comps[k]) >= (int)sizeof(aname))
+		{
+			s_search_truncated = 1;
+			return;
+		}
+
+		found = explorer_search_find_path(apath);
+
+		if(found >= 0)
+		{
+			s_search_expanded[found] = 1;
+			continue;
+		}
+
+		found = explorer_search_add(aname, apath, 1, k);
+
+		if(found >= 0)
+		{
+			s_search_expanded[found] = 1;
+		}
+		else
+		{
+			return;
+		}
+	}
 }
 
 static int explorer_tree_width(void)
@@ -176,10 +575,10 @@ static int explorer_selection_target(char *out, size_t cap, int *is_dir_out)
 
 	if(is_dir_out != NULL)
 	{
-		*is_dir_out = s_explorer.is_dir[idx];
+		*is_dir_out = explorer_entry_is_dir(idx);
 	}
 
-	if(snprintf(out, cap, "%s", s_explorer.paths[idx]) >= (int)cap)
+	if(snprintf(out, cap, "%s", explorer_entry_path(idx)) >= (int)cap)
 	{
 		return -1;
 	}
@@ -503,9 +902,463 @@ static int explorer_list_dir(const char *dir, ExplorerChild *out, int cap, int *
 	return n;
 }
 
+static const char *explorer_search_rel(const char *path)
+{
+	size_t cwd_len;
+
+	if(path == NULL)
+	{
+		return "";
+	}
+
+	cwd_len = strlen(s_explorer.cwd);
+
+	if(cwd_len == 0 || strncmp(path, s_explorer.cwd, cwd_len) != 0)
+	{
+		return path;
+	}
+
+	path += cwd_len;
+
+	if(*path == '/')
+	{
+		path++;
+	}
+
+	return path;
+}
+
+/* Tree order comparator for deep-search hits: compare relative paths
+level by level, dirs before files at the first differing level,
+alphabetical within the same kind, parents before children. Intermediate
+components are always dirs (they are ancestors by construction). */
+static int explorer_search_before(const char *pa, int da, const char *pb, int db)
+{
+	const char *ra;
+	const char *rb;
+
+	if(pa == NULL || pb == NULL)
+	{
+		return 0;
+	}
+
+	ra = explorer_search_rel(pa);
+	rb = explorer_search_rel(pb);
+
+	while(*ra != '\0' || *rb != '\0')
+	{
+		const char *ea;
+		const char *eb;
+		size_t lena;
+		size_t lenb;
+		size_t min;
+		int a_last;
+		int b_last;
+		int a_dir;
+		int b_dir;
+		int cmp;
+
+		if(*ra == '\0')
+		{
+			return 1;
+		}
+
+		if(*rb == '\0')
+		{
+			return 0;
+		}
+
+		ea = strchr(ra, '/');
+		eb = strchr(rb, '/');
+
+		if(ea != NULL)
+		{
+			lena = (size_t)(ea - ra);
+		}
+		else
+		{
+			lena = strlen(ra);
+		}
+
+		if(eb != NULL)
+		{
+			lenb = (size_t)(eb - rb);
+		}
+		else
+		{
+			lenb = strlen(rb);
+		}
+
+		a_last = (ea == NULL);
+		b_last = (eb == NULL);
+
+		if(a_last != 0)
+		{
+			a_dir = da;
+		}
+		else
+		{
+			a_dir = 1;
+		}
+
+		if(b_last != 0)
+		{
+			b_dir = db;
+		}
+		else
+		{
+			b_dir = 1;
+		}
+
+		if(lena < lenb)
+		{
+			min = lena;
+		}
+		else
+		{
+			min = lenb;
+		}
+
+		cmp = strncmp(ra, rb, min);
+
+		if(cmp != 0)
+		{
+			if(a_dir != b_dir)
+			{
+				return a_dir != 0;
+			}
+
+			return cmp < 0;
+		}
+
+		if(lena != lenb)
+		{
+			if(a_dir != b_dir)
+			{
+				return a_dir != 0;
+			}
+
+			return lena < lenb;
+		}
+
+		if(a_last != 0 && b_last != 0)
+		{
+			return 0;
+		}
+
+		if(a_last != 0)
+		{
+			return 1;
+		}
+
+		if(b_last != 0)
+		{
+			return 0;
+		}
+
+		ra += lena + 1;
+		rb += lenb + 1;
+	}
+
+	return 0;
+}
+
+static void explorer_search_sort(void)
+{
+	int i;
+
+	for(i = 1; i < s_search_total; i++)
+	{
+		char tname[EXPLORER_NAME_LIMIT];
+		char tpath[FILENAME_LIMIT];
+		int tdir;
+		int tdepth;
+		int j;
+
+		snprintf(tname, sizeof(tname), "%s", s_search_names[i]);
+		snprintf(tpath, sizeof(tpath), "%s", s_search_paths[i]);
+		tdir = s_search_is_dir[i];
+		tdepth = s_search_depth[i];
+		j = i - 1;
+
+		while(j >= 0 && explorer_search_before(tpath, tdir, s_search_paths[j], s_search_is_dir[j]) != 0)
+		{
+			memmove(s_search_names[j + 1], s_search_names[j], sizeof(s_search_names[0]));
+			memmove(s_search_paths[j + 1], s_search_paths[j], sizeof(s_search_paths[0]));
+			s_search_is_dir[j + 1] = s_search_is_dir[j];
+			s_search_depth[j + 1] = s_search_depth[j];
+			j--;
+		}
+
+		snprintf(s_search_names[j + 1], sizeof(s_search_names[j + 1]), "%s", tname);
+		snprintf(s_search_paths[j + 1], sizeof(s_search_paths[j + 1]), "%s", tpath);
+		s_search_is_dir[j + 1] = tdir;
+		s_search_depth[j + 1] = tdepth;
+	}
+}
+
+static void explorer_search_update_expanded(void)
+{
+	int i;
+	int j;
+
+	for(i = 0; i < s_search_total; i++)
+	{
+		size_t len;
+
+		if(s_search_is_dir[i] == 0)
+		{
+			s_search_expanded[i] = 0;
+			continue;
+		}
+
+		s_search_expanded[i] = 0;
+		len = strlen(s_search_paths[i]);
+
+		for(j = 0; j < s_search_total; j++)
+		{
+			if(i == j)
+			{
+				continue;
+			}
+
+			if(strncmp(s_search_paths[j], s_search_paths[i], len) != 0)
+			{
+				continue;
+			}
+
+			if(s_search_paths[j][len] == '\0')
+			{
+				continue;
+			}
+
+			if(len == 1 && s_search_paths[i][0] == '/')
+			{
+				s_search_expanded[i] = 1;
+				break;
+			}
+
+			if(s_search_paths[j][len] == '/')
+			{
+				s_search_expanded[i] = 1;
+				break;
+			}
+		}
+	}
+}
+
+/* Deep search: walk the cwd subtree (single shared s_kids buffer, iterative
+stack so no per-level child list must survive recursion), collect every
+name-or-path fuzzy hit plus its ancestor chain, then sort into tree order.
+Dotfiles are included; symlink dirs are not descended (lstat); over-cap,
+per-dir truncation, max depth, and over-long paths set the truncated flag. */
+static void explorer_set_status(void);
+
+static void explorer_search_collect(void)
+{
+	int n;
+	int trunc;
+	int i;
+
+	s_search_total = 0;
+	s_search_truncated = 0;
+	s_search_stack_top = 0;
+
+	if(s_explorer.query[0] == '\0')
+	{
+		return;
+	}
+
+	trunc = 0;
+	n = explorer_list_dir(s_explorer.cwd, s_kids, EXPLORER_MAX_ENTRIES, &trunc);
+
+	if(trunc != 0)
+	{
+		s_search_truncated = 1;
+	}
+
+	if(n < 0)
+	{
+		return;
+	}
+
+	for(i = 0; i < n; i++)
+	{
+		char cname[EXPLORER_NAME_LIMIT];
+		char cpath[FILENAME_LIMIT];
+		int cis_dir;
+
+		if(s_search_total >= EXPLORER_MAX_ENTRIES)
+		{
+			s_search_truncated = 1;
+			break;
+		}
+
+		snprintf(cname, sizeof(cname), "%s", s_kids[i].name);
+		snprintf(cpath, sizeof(cpath), "%s", s_kids[i].path);
+		cis_dir = s_kids[i].is_dir;
+
+		if(explorer_search_matches(cname, cpath) != 0)
+		{
+			if(explorer_search_find_path(cpath) < 0)
+			{
+				explorer_search_add(cname, cpath, cis_dir, 0);
+			}
+		}
+
+		if(cis_dir != 0)
+		{
+			if(1 >= EXPLORER_SEARCH_MAX_DEPTH)
+			{
+				s_search_truncated = 1;
+				continue;
+			}
+
+			if(s_search_stack_top >= EXPLORER_SEARCH_MAX_STACK)
+			{
+				s_search_truncated = 1;
+				continue;
+			}
+
+			if(snprintf(s_search_stack[s_search_stack_top], sizeof(s_search_stack[0]), "%s", cpath) >= (int)sizeof(s_search_stack[0]))
+			{
+				s_search_truncated = 1;
+				continue;
+			}
+
+			s_search_stack_depth[s_search_stack_top] = 0;
+			s_search_stack_top++;
+		}
+	}
+
+	while(s_search_stack_top > 0)
+	{
+		char dir[FILENAME_LIMIT];
+		int ddepth;
+
+		if(s_search_total >= EXPLORER_MAX_ENTRIES)
+		{
+			s_search_truncated = 1;
+			break;
+		}
+
+		s_search_stack_top--;
+		snprintf(dir, sizeof(dir), "%s", s_search_stack[s_search_stack_top]);
+		ddepth = s_search_stack_depth[s_search_stack_top];
+
+		trunc = 0;
+		n = explorer_list_dir(dir, s_kids, EXPLORER_MAX_ENTRIES, &trunc);
+
+		if(trunc != 0)
+		{
+			s_search_truncated = 1;
+		}
+
+		if(n < 0)
+		{
+			continue;
+		}
+
+		for(i = 0; i < n; i++)
+		{
+			char cname[EXPLORER_NAME_LIMIT];
+			char cpath[FILENAME_LIMIT];
+			int cis_dir;
+			int cdepth;
+
+			if(s_search_total >= EXPLORER_MAX_ENTRIES)
+			{
+				s_search_truncated = 1;
+				break;
+			}
+
+			snprintf(cname, sizeof(cname), "%s", s_kids[i].name);
+			snprintf(cpath, sizeof(cpath), "%s", s_kids[i].path);
+			cis_dir = s_kids[i].is_dir;
+			cdepth = ddepth + 1;
+
+			if(cdepth < 0 || cdepth >= EXPLORER_SEARCH_MAX_DEPTH)
+			{
+				s_search_truncated = 1;
+				continue;
+			}
+
+			if(explorer_search_matches(cname, cpath) != 0)
+			{
+				explorer_search_ensure_ancestors(cpath, cdepth);
+
+				if(explorer_search_find_path(cpath) < 0)
+				{
+					explorer_search_add(cname, cpath, cis_dir, cdepth);
+				}
+
+				if(s_search_total >= EXPLORER_MAX_ENTRIES)
+				{
+					s_search_truncated = 1;
+					break;
+				}
+			}
+
+			if(cis_dir != 0)
+			{
+				if(cdepth + 1 >= EXPLORER_SEARCH_MAX_DEPTH)
+				{
+					s_search_truncated = 1;
+					continue;
+				}
+
+				if(s_search_stack_top >= EXPLORER_SEARCH_MAX_STACK)
+				{
+					s_search_truncated = 1;
+					continue;
+				}
+
+				if(snprintf(s_search_stack[s_search_stack_top], sizeof(s_search_stack[0]), "%s", cpath) >= (int)sizeof(s_search_stack[0]))
+				{
+					s_search_truncated = 1;
+					continue;
+				}
+
+				s_search_stack_depth[s_search_stack_top] = cdepth;
+				s_search_stack_top++;
+			}
+		}
+	}
+
+	explorer_search_sort();
+	explorer_search_update_expanded();
+}
+
 static void explorer_refilter(void)
 {
 	int i;
+
+	if(explorer_in_search() != 0)
+	{
+		explorer_search_collect();
+
+		s_explorer.count = 0;
+		s_explorer.selected = 0;
+		s_explorer.scroll = 0;
+
+		for(i = 0; i < s_search_total && i < EXPLORER_MAX_ENTRIES; i++)
+		{
+			s_explorer.filtered[i] = i;
+		}
+
+		if(s_search_total > EXPLORER_MAX_ENTRIES)
+		{
+			s_explorer.count = EXPLORER_MAX_ENTRIES;
+		}
+		else
+		{
+			s_explorer.count = s_search_total;
+		}
+
+		explorer_preview_invalidate();
+		explorer_set_status();
+		return;
+	}
 
 	s_explorer.count = 0;
 	s_explorer.selected = 0;
@@ -528,11 +1381,19 @@ static void explorer_refilter(void)
 	}
 
 	explorer_preview_invalidate();
+	explorer_set_status();
 }
 
 static void explorer_set_status(void)
 {
 	char msg[STATUS_LIMIT];
+
+	if(explorer_in_search() != 0 && s_search_truncated != 0)
+	{
+		snprintf(msg, sizeof(msg), "Explorer: %.200s (truncated)", s_explorer.cwd);
+		editor_set_status(msg);
+		return;
+	}
 
 	if(s_explorer.truncated != 0)
 	{
@@ -604,8 +1465,8 @@ static void explorer_rescan(void)
 
 	if(n < 0)
 	{
-		editor_set_status("Cannot open directory");
 		explorer_refilter();
+		editor_set_status("Cannot open directory");
 		return;
 	}
 
@@ -632,8 +1493,9 @@ static void explorer_rescan(void)
 }
 
 /* Rebuild the visible list after an expand/collapse, keeping the
-selection on the same row. A non-empty query flattens matches, so it
-falls back to the full refilter (selection resets, as when typing). */
+selection on the same row. A non-empty query shows deep-search hits with
+their ancestor tree paths, so it falls back to the full refilter
+(selection resets, as when typing). */
 static void explorer_reindex(int keep_row)
 {
 	int visible;
@@ -695,6 +1557,11 @@ static void explorer_reindex(int keep_row)
 
 static int explorer_is_parent_row(int row)
 {
+	if(explorer_in_search() != 0)
+	{
+		return 0;
+	}
+
 	if(row < 0 || row >= s_explorer.total)
 	{
 		return 0;
@@ -709,6 +1576,11 @@ static void explorer_expand(int row)
 	int n;
 	int trunc;
 	int i;
+
+	if(explorer_in_search() != 0)
+	{
+		return;
+	}
 
 	if(row < 0 || row >= s_explorer.total)
 	{
@@ -787,6 +1659,11 @@ static void explorer_collapse(int row)
 	int d;
 	int j;
 	int n;
+
+	if(explorer_in_search() != 0)
+	{
+		return;
+	}
 
 	if(row < 0 || row >= s_explorer.total)
 	{
@@ -923,19 +1800,19 @@ static void explorer_enter(void)
 
 	idx = s_explorer.filtered[s_explorer.selected];
 
-	if(explorer_is_parent_row(idx))
+	if(explorer_entry_is_parent(idx) != 0)
 	{
 		explorer_parent();
 		return;
 	}
 
-	if(snprintf(target, sizeof(target), "%s", s_explorer.paths[idx]) >= (int)sizeof(target))
+	if(snprintf(target, sizeof(target), "%s", explorer_entry_path(idx)) >= (int)sizeof(target))
 	{
 		editor_set_status("Path too long");
 		return;
 	}
 
-	if(s_explorer.is_dir[idx] != 0)
+	if(explorer_entry_is_dir(idx) != 0)
 	{
 		size_t len;
 
@@ -1040,6 +1917,9 @@ void explorer_open(const char *start_dir)
 	s_explorer.selected = 0;
 	s_explorer.scroll = 0;
 	s_explorer.truncated = 0;
+	s_search_total = 0;
+	s_search_truncated = 0;
+	s_search_stack_top = 0;
 	explorer_preview_invalidate();
 
 	dir = start_dir;
@@ -1113,6 +1993,9 @@ void explorer_reset(void)
 	s_explorer.scroll = 0;
 	s_explorer.query[0] = '\0';
 	s_explorer.truncated = 0;
+	s_search_total = 0;
+	s_search_truncated = 0;
+	s_search_stack_top = 0;
 	explorer_preview_invalidate();
 }
 
@@ -1144,6 +2027,11 @@ int explorer_handle_key(int key)
 
 	if(key == KEY_LEFT)
 	{
+		if(explorer_in_search() != 0)
+		{
+			return 0;
+		}
+
 		if(s_explorer.count > 0 && s_explorer.selected >= 0 &&
 			s_explorer.selected < s_explorer.count)
 		{
@@ -1151,14 +2039,14 @@ int explorer_handle_key(int key)
 
 			idx = s_explorer.filtered[s_explorer.selected];
 
-			if(s_explorer.is_dir[idx] != 0 && s_explorer.expanded[idx] != 0 &&
-				explorer_is_parent_row(idx) == 0)
+			if(explorer_entry_is_dir(idx) != 0 && explorer_entry_expanded(idx) != 0 &&
+				explorer_entry_is_parent(idx) == 0)
 			{
 				explorer_collapse(idx);
 			}
 			else if(s_explorer.query[0] == '\0' &&
-				explorer_is_parent_row(idx) == 0 &&
-				s_explorer.depth[idx] > 0)
+				explorer_entry_is_parent(idx) == 0 &&
+				explorer_entry_depth(idx) > 0)
 			{
 				int q;
 
@@ -1168,9 +2056,9 @@ int explorer_handle_key(int key)
 
 					parent = s_explorer.filtered[q];
 
-					if(s_explorer.depth[parent] == s_explorer.depth[idx] - 1)
+					if(explorer_entry_depth(parent) == explorer_entry_depth(idx) - 1)
 					{
-						if(s_explorer.expanded[parent] != 0)
+						if(explorer_entry_expanded(parent) != 0)
 						{
 							explorer_collapse(parent);
 						}
@@ -1178,7 +2066,7 @@ int explorer_handle_key(int key)
 						break;
 					}
 
-					if(s_explorer.depth[parent] < s_explorer.depth[idx] - 1)
+					if(explorer_entry_depth(parent) < explorer_entry_depth(idx) - 1)
 					{
 						break;
 					}
@@ -1198,8 +2086,9 @@ int explorer_handle_key(int key)
 
 			idx = s_explorer.filtered[s_explorer.selected];
 
-			if(s_explorer.is_dir[idx] != 0 && s_explorer.expanded[idx] == 0 &&
-				explorer_is_parent_row(idx) == 0)
+			if(explorer_in_search() == 0 &&
+				explorer_entry_is_dir(idx) != 0 && explorer_entry_expanded(idx) == 0 &&
+				explorer_entry_is_parent(idx) == 0)
 			{
 				explorer_expand(idx);
 				return 0;
@@ -1289,13 +2178,13 @@ static int explorer_is_last_visible(int pos)
 		return 1;
 	}
 
-	d = s_explorer.depth[s_explorer.filtered[pos]];
+	d = explorer_entry_depth(s_explorer.filtered[pos]);
 
 	for(j = pos + 1; j < s_explorer.count; j++)
 	{
 		int dj;
 
-		dj = s_explorer.depth[s_explorer.filtered[j]];
+		dj = explorer_entry_depth(s_explorer.filtered[j]);
 
 		if(dj == d)
 		{
@@ -1326,17 +2215,17 @@ static int explorer_name_attr(int row)
 	size_t len;
 	size_t i;
 
-	if(explorer_is_parent_row(row))
+	if(explorer_entry_is_parent(row) != 0)
 	{
 		return highlight_attr(HL_STRING);
 	}
 
-	if(s_explorer.is_dir[row] != 0)
+	if(explorer_entry_is_dir(row) != 0)
 	{
 		return highlight_attr(HL_COMMENT);
 	}
 
-	name = s_explorer.names[row];
+	name = explorer_entry_name(row);
 	len = strlen(name);
 
 	if(len > 3 && strcmp(&name[len - 3], ".md") == 0)
@@ -1390,7 +2279,7 @@ void explorer_draw(void)
 	visible = explorer_visible_rows();
 	tree_w = explorer_tree_width();
 	preview_w = explorer_preview_width();
-	tree_art = (s_explorer.query[0] == '\0');
+	tree_art = 1;
 	level_w = config_tab_width();
 
 	if(level_w < 2)
@@ -1457,8 +2346,8 @@ void explorer_draw(void)
 			plen = 0;
 			prefix[0] = '\0';
 
-			if(tree_art != 0 && explorer_is_parent_row(idx) == 0 &&
-				s_explorer.depth[idx] > 0)
+			if(tree_art != 0 && explorer_entry_is_parent(idx) == 0 &&
+				explorer_entry_depth(idx) > 0)
 			{
 				int max_levels;
 				int start;
@@ -1471,14 +2360,14 @@ void explorer_draw(void)
 					max_levels = 1;
 				}
 
-				start = s_explorer.depth[idx] - max_levels;
+				start = explorer_entry_depth(idx) - max_levels;
 
 				if(start < 0)
 				{
 					start = 0;
 				}
 
-				for(level = start; level < s_explorer.depth[idx]; level++)
+				for(level = start; level < explorer_entry_depth(idx); level++)
 				{
 					int q;
 					int ancestor;
@@ -1492,7 +2381,7 @@ void explorer_draw(void)
 					{
 						int dq;
 
-						dq = s_explorer.depth[s_explorer.filtered[q]];
+						dq = explorer_entry_depth(s_explorer.filtered[q]);
 
 						if(dq == level)
 						{
@@ -1535,11 +2424,11 @@ void explorer_draw(void)
 				}
 			}
 
-			if(explorer_is_parent_row(idx) == 0)
+			if(explorer_entry_is_parent(idx) == 0)
 			{
-				if(s_explorer.is_dir[idx] != 0)
+				if(explorer_entry_is_dir(idx) != 0)
 				{
-					if(s_explorer.expanded[idx] != 0)
+					if(explorer_entry_expanded(idx) != 0)
 					{
 						if(plen + 5 < (int)sizeof(prefix))
 						{
@@ -1553,7 +2442,7 @@ void explorer_draw(void)
 						plen += 5;
 					}
 				}
-				else if(tree_art == 0 || s_explorer.depth[idx] == 0)
+				else if(tree_art == 0 || explorer_entry_depth(idx) == 0)
 				{
 					if(plen + 2 < (int)sizeof(prefix))
 					{
@@ -1585,12 +2474,12 @@ void explorer_draw(void)
 			mvaddnstr(row, 0, prefix, plen);
 
 			attron(nattr);
-			nbytes = (int)utf8_fit_cells(s_explorer.names[idx],
-				strlen(s_explorer.names[idx]), width - col);
+			nbytes = (int)utf8_fit_cells(explorer_entry_name(idx),
+				strlen(explorer_entry_name(idx)), width - col);
 
 			if(nbytes > 0)
 			{
-				mvaddnstr(row, col, s_explorer.names[idx], nbytes);
+				mvaddnstr(row, col, explorer_entry_name(idx), nbytes);
 			}
 
 			attroff(nattr);
