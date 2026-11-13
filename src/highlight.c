@@ -1575,6 +1575,9 @@ void highlight_init_color(void)
 	int acid;
 	int fg;
 	int bg;
+	int accent;
+	int accent2;
+	int palfg;
 	int base_fg;
 	int base_bg;
 
@@ -1622,9 +1625,27 @@ void highlight_init_color(void)
 	fg = config_highlight_fg(CONFIG_HL_PREPROC);
 	init_pair(HL_PAIR_PREPROC, hl_fit_fg(fg, fb[4]), bg);
 	init_pair(HL_PAIR_NORMAL, base_fg, base_bg);
-	init_pair(HL_PAIR_PAL_BOX, hl_fit_fg(75, COLOR_BLUE), bg);
-	init_pair(HL_PAIR_PAL_SEL, hl_fit_fg(231, COLOR_WHITE), hl_fit_fg(24, COLOR_BLUE));
-	init_pair(HL_PAIR_PAL_BADGE, hl_fit_fg(231, COLOR_WHITE), hl_fit_fg(63, COLOR_BLUE));
+
+	/* Palette accents follow the active theme: the keyword slot is the
+	primary accent (input border, selected-row background), the string
+	slot is the secondary accent (keybinding badge). Text on accent
+	backgrounds uses the theme background, black when unset. Mono and
+	colorless terminals keep the A_REVERSE/A_BOLD fallbacks below. */
+	accent = hl_fit_fg(config_highlight_fg(CONFIG_HL_KEYWORD), COLOR_YELLOW);
+	accent2 = hl_fit_fg(config_highlight_fg(CONFIG_HL_STRING), COLOR_GREEN);
+
+	if(base_bg >= 0)
+	{
+		palfg = base_bg;
+	}
+	else
+	{
+		palfg = COLOR_BLACK;
+	}
+
+	init_pair(HL_PAIR_PAL_BOX, accent, bg);
+	init_pair(HL_PAIR_PAL_SEL, palfg, accent);
+	init_pair(HL_PAIR_PAL_BADGE, palfg, accent2);
 	s_color = 1;
 
 	if(base_bg >= 0)
