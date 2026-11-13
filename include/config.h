@@ -1,6 +1,8 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#include <stddef.h>
+
 #define CONFIG_DEFAULT_TAB_WIDTH 4
 #define CONFIG_MIN_TAB_WIDTH 1
 #define CONFIG_MAX_TAB_WIDTH 16
@@ -24,6 +26,9 @@ void config_load(void);
 int config_tab_width(void);
 /* Non-zero when key is bound to action (full input.c table). */
 int config_key_matches(const char *action, int key);
+/* Label for the first binding of action ("Ctrl+S", "F1", "Shift+Tab"...).
+Empty string when the action has no binding. Palette badge source. */
+void config_key_label(const char *action, char *buf, size_t cap);
 /* Foreground for a highlight class: 0..255 ncurses color, -1 default. */
 int config_highlight_fg(int cls);
 /* Non-zero when the active theme is the softer-dark green-acid one. */

@@ -15,6 +15,9 @@
 #define HL_PAIR_NUMBER 4
 #define HL_PAIR_PREPROC 5
 #define HL_PAIR_NORMAL 6
+#define HL_PAIR_PAL_BOX 7
+#define HL_PAIR_PAL_SEL 8
+#define HL_PAIR_PAL_BADGE 9
 
 static const char *s_keywords[] =
 {
@@ -1619,6 +1622,9 @@ void highlight_init_color(void)
 	fg = config_highlight_fg(CONFIG_HL_PREPROC);
 	init_pair(HL_PAIR_PREPROC, hl_fit_fg(fg, fb[4]), bg);
 	init_pair(HL_PAIR_NORMAL, base_fg, base_bg);
+	init_pair(HL_PAIR_PAL_BOX, hl_fit_fg(75, COLOR_BLUE), bg);
+	init_pair(HL_PAIR_PAL_SEL, hl_fit_fg(231, COLOR_WHITE), hl_fit_fg(24, COLOR_BLUE));
+	init_pair(HL_PAIR_PAL_BADGE, hl_fit_fg(231, COLOR_WHITE), hl_fit_fg(63, COLOR_BLUE));
 	s_color = 1;
 
 	if(base_bg >= 0)
@@ -1697,6 +1703,41 @@ int highlight_git_attr(GitMarker marker)
 	if(marker == GIT_DELETED)
 	{
 		return COLOR_PAIR(HL_PAIR_PREPROC);
+	}
+
+	return A_NORMAL;
+}
+
+int highlight_palette_attr(HlPaletteAttr id)
+{
+	if(s_color == 0)
+	{
+		if(id == HL_PAL_SEL)
+		{
+			return A_REVERSE;
+		}
+
+		if(id == HL_PAL_BADGE)
+		{
+			return A_BOLD;
+		}
+
+		return A_NORMAL;
+	}
+
+	if(id == HL_PAL_BOX)
+	{
+		return COLOR_PAIR(HL_PAIR_PAL_BOX);
+	}
+
+	if(id == HL_PAL_SEL)
+	{
+		return COLOR_PAIR(HL_PAIR_PAL_SEL);
+	}
+
+	if(id == HL_PAL_BADGE)
+	{
+		return COLOR_PAIR(HL_PAIR_PAL_BADGE);
 	}
 
 	return A_NORMAL;

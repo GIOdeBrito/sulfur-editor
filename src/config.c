@@ -516,6 +516,263 @@ static const ConfigDefault *config_default_for(const char *action)
 	return NULL;
 }
 
+static int config_first_key(const char *action)
+{
+	const ConfigDefault *def;
+	int i;
+
+	if(action == NULL)
+	{
+		return -1;
+	}
+
+	if(s_loaded != 0)
+	{
+		for(i = 0; i < s_resolved_count; i++)
+		{
+			if(strcmp(s_resolved[i].action, action) != 0)
+			{
+				continue;
+			}
+
+			if(s_resolved[i].nkeys <= 0)
+			{
+				return -1;
+			}
+
+			return s_resolved[i].keys[0];
+		}
+
+		return -1;
+	}
+
+	def = config_default_for(action);
+
+	if(def == NULL || def->nkeys <= 0)
+	{
+		return -1;
+	}
+
+	return def->keys[0];
+}
+
+/* Human label for one key code. Unknown codes stay empty so palette
+badges show nothing instead of garbage. */
+static void config_label_code(int key, char *buf, size_t cap)
+{
+	int fn;
+
+	if(buf == NULL || cap == 0)
+	{
+		return;
+	}
+
+	buf[0] = '\0';
+
+	if(key < 0)
+	{
+		return;
+	}
+
+	if(key == 0)
+	{
+		snprintf(buf, cap, "Ctrl+Space");
+		return;
+	}
+
+	if(key >= 1 && key <= 26)
+	{
+		if(key == '\t')
+		{
+			snprintf(buf, cap, "Tab");
+			return;
+		}
+
+		if(key == '\n' || key == '\r')
+		{
+			snprintf(buf, cap, "Enter");
+			return;
+		}
+
+		snprintf(buf, cap, "Ctrl+%c", (char)('A' + key - 1));
+		return;
+	}
+
+	if(key == 27)
+	{
+		snprintf(buf, cap, "Esc");
+		return;
+	}
+
+	if(key == 28)
+	{
+		snprintf(buf, cap, "Ctrl+\\");
+		return;
+	}
+
+	if(key == 29)
+	{
+		snprintf(buf, cap, "Ctrl+]");
+		return;
+	}
+
+	if(key == 30)
+	{
+		snprintf(buf, cap, "Ctrl+^");
+		return;
+	}
+
+	if(key == 31)
+	{
+		snprintf(buf, cap, "Ctrl+_");
+		return;
+	}
+
+	if(key == 127)
+	{
+		snprintf(buf, cap, "Del");
+		return;
+	}
+
+	if(key == KEY_BACKSPACE)
+	{
+		snprintf(buf, cap, "Backspace");
+		return;
+	}
+
+	if(key == KEY_DC)
+	{
+		snprintf(buf, cap, "Delete");
+		return;
+	}
+
+	if(key == KEY_ENTER)
+	{
+		snprintf(buf, cap, "Enter");
+		return;
+	}
+
+	if(key == KEY_UP)
+	{
+		snprintf(buf, cap, "Up");
+		return;
+	}
+
+	if(key == KEY_DOWN)
+	{
+		snprintf(buf, cap, "Down");
+		return;
+	}
+
+	if(key == KEY_LEFT)
+	{
+		snprintf(buf, cap, "Left");
+		return;
+	}
+
+	if(key == KEY_RIGHT)
+	{
+		snprintf(buf, cap, "Right");
+		return;
+	}
+
+	if(key == KEY_HOME)
+	{
+		snprintf(buf, cap, "Home");
+		return;
+	}
+
+	if(key == KEY_END)
+	{
+		snprintf(buf, cap, "End");
+		return;
+	}
+
+	if(key == KEY_PPAGE)
+	{
+		snprintf(buf, cap, "PgUp");
+		return;
+	}
+
+	if(key == KEY_NPAGE)
+	{
+		snprintf(buf, cap, "PgDn");
+		return;
+	}
+
+	if(key == KEY_BTAB)
+	{
+		snprintf(buf, cap, "Shift+Tab");
+		return;
+	}
+
+	if(key == KEY_SLEFT)
+	{
+		snprintf(buf, cap, "Shift+Left");
+		return;
+	}
+
+	if(key == KEY_SRIGHT)
+	{
+		snprintf(buf, cap, "Shift+Right");
+		return;
+	}
+
+	if(key == KEY_SR)
+	{
+		snprintf(buf, cap, "Shift+Up");
+		return;
+	}
+
+	if(key == KEY_SF)
+	{
+		snprintf(buf, cap, "Shift+Down");
+		return;
+	}
+
+	if(key == KEY_SHOME)
+	{
+		snprintf(buf, cap, "Shift+Home");
+		return;
+	}
+
+	if(key == KEY_SEND)
+	{
+		snprintf(buf, cap, "Shift+End");
+		return;
+	}
+
+	if(key == KEY_SPREVIOUS)
+	{
+		snprintf(buf, cap, "Shift+PgUp");
+		return;
+	}
+
+	if(key == KEY_SNEXT)
+	{
+		snprintf(buf, cap, "Shift+PgDn");
+		return;
+	}
+
+	if(key >= KEY_F(1) && key <= KEY_F(12))
+	{
+		fn = key - KEY_F(1) + 1;
+		snprintf(buf, cap, "F%d", fn);
+		return;
+	}
+}
+
+void config_key_label(const char *action, char *buf, size_t cap)
+{
+	if(buf == NULL || cap == 0)
+	{
+		return;
+	}
+
+	buf[0] = '\0';
+	config_label_code(config_first_key(action), buf, cap);
+}
+
 static ConfigEntry *config_user_for(const char *action)
 {
 	int i;

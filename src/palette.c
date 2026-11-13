@@ -6,9 +6,11 @@
 #include "clipboard.h"
 #include "common.h"
 #include "complete.h"
+#include "config.h"
 #include "edit.h"
 #include "editor.h"
 #include "explorer.h"
+#include "highlight.h"
 #include "input.h"
 #include "palette.h"
 #include "search.h"
@@ -17,8 +19,8 @@
 
 #define PALETTE_MAX_QUERY 64
 #define PALETTE_MAX_ITEMS 20
-#define PALETTE_MAX_VISIBLE 8
-#define PALETTE_MODAL_CONTENT 40
+#define PALETTE_MAX_VISIBLE 7
+#define PALETTE_MODAL_CONTENT 70
 
 typedef enum
 {
@@ -47,34 +49,37 @@ typedef enum
 typedef struct
 {
 	const char *cmd;
+	const char *group;
 	const char *name;
 	PaletteAction action;
+	const char *key;
 } PaletteItem;
 
-/* Slash commands are shown in every row (`/cmd` + description) and are
-matched by the filter alongside the human-readable name. */
+/* Slash commands are hidden filter aliases matched alongside the
+visible "Group: Name" label. `key` names the config action shown as
+the right-aligned badge, NULL for unbound commands (no badge). */
 static const PaletteItem s_table[] =
 {
-	{ "/save", "Save", PAL_SAVE },
-	{ "/save-as", "Save As...", PAL_SAVE_AS },
-	{ "/quit", "Quit", PAL_QUIT },
-	{ "/open-file", "Open File...", PAL_OPEN_FILE },
-	{ "/find", "Find...", PAL_FIND },
-	{ "/find-next", "Find Next", PAL_FIND_NEXT },
-	{ "/find-previous", "Find Previous", PAL_FIND_PREV },
-	{ "/undo", "Undo", PAL_UNDO },
-	{ "/redo", "Redo", PAL_REDO },
-	{ "/indent", "Indent Selection", PAL_INDENT },
-	{ "/delete-selection", "Delete Selection", PAL_DELETE_SELECTION },
-	{ "/unindent", "Unindent", PAL_UNINDENT },
-	{ "/clear-selection", "Clear Selection", PAL_CLEAR_SELECTION },
-	{ "/copy", "Copy", PAL_COPY },
-	{ "/cut", "Cut", PAL_CUT },
-	{ "/paste", "Paste", PAL_PASTE },
-	{ "/complete-word", "Complete Word", PAL_COMPLETE_WORD },
-	{ "/next-buffer", "Next Buffer", PAL_NEXT_BUFFER },
-	{ "/previous-buffer", "Previous Buffer", PAL_PREV_BUFFER },
-	{ "/close-buffer", "Close Buffer", PAL_CLOSE_BUFFER }
+	{ "/save", "File", "Save", PAL_SAVE, "save" },
+	{ "/save-as", "File", "Save As...", PAL_SAVE_AS, NULL },
+	{ "/quit", "File", "Quit", PAL_QUIT, "quit" },
+	{ "/open-file", "File", "Open File...", PAL_OPEN_FILE, NULL },
+	{ "/find", "Search", "Find...", PAL_FIND, "find" },
+	{ "/find-next", "Search", "Find Next", PAL_FIND_NEXT, NULL },
+	{ "/find-previous", "Search", "Find Previous", PAL_FIND_PREV, NULL },
+	{ "/undo", "Edit", "Undo", PAL_UNDO, "undo" },
+	{ "/redo", "Edit", "Redo", PAL_REDO, "redo" },
+	{ "/indent", "Edit", "Indent Selection", PAL_INDENT, NULL },
+	{ "/delete-selection", "Edit", "Delete Selection", PAL_DELETE_SELECTION, NULL },
+	{ "/unindent", "Edit", "Unindent", PAL_UNINDENT, "unindent" },
+	{ "/clear-selection", "Edit", "Clear Selection", PAL_CLEAR_SELECTION, NULL },
+	{ "/copy", "Edit", "Copy", PAL_COPY, "copy" },
+	{ "/cut", "Edit", "Cut", PAL_CUT, "cut" },
+	{ "/paste", "Edit", "Paste", PAL_PASTE, "paste" },
+	{ "/complete-word", "Edit", "Complete Word", PAL_COMPLETE_WORD, "force-complete" },
+	{ "/next-buffer", "Buffer", "Next Buffer", PAL_NEXT_BUFFER, "next-tab" },
+	{ "/previous-buffer", "Buffer", "Previous Buffer", PAL_PREV_BUFFER, "prev-tab" },
+	{ "/close-buffer", "Buffer", "Close Buffer", PAL_CLOSE_BUFFER, NULL }
 };
 
 #define PALETTE_TABLE_COUNT ((int)(sizeof(s_table) / sizeof(s_table[0])))
@@ -521,7 +526,7 @@ static void palette_box(int *x, int *y, int *w, int *h, int visible)
 	}
 
 	*y = 1;
-	*h = visible + 3;
+	*h = visible + 6;
 }
 
 static int palette_visible_rows(void)
@@ -538,7 +543,7 @@ static int palette_visible_rows(void)
 
 	y = 1;
 
-	while(visible > 0 && y + visible + 3 > LINES - 2)
+	while(visible > 0 && y + visible + 5 > LINES - 1)
 	{
 		visible--;
 	}
@@ -561,7 +566,7 @@ void palette_dim_background(void)
 		return;
 	}
 
-	if(LINES < 5 || COLS < 10)
+	if(LINES < 7 || COLS < 10)
 	{
 		return;
 	}
@@ -590,6 +595,17 @@ void palette_dim_background(void)
 	}
 }
 
+/* Input text width inside the field box, given the outer modal width. */
+static int palette_input_textw(int w)
+{
+	if(w < 8)
+	{
+		return 0;
+	}
+
+	return w - 6;
+}
+
 int palette_query_cursor_x(void)
 {
 	int x;
@@ -597,13 +613,15 @@ int palette_query_cursor_x(void)
 	int w;
 	int h;
 	int len;
+	int textw;
 
 	palette_box(&x, &y, &w, &h, 0);
+	textw = palette_input_textw(w);
 	len = utf8_width_n(s_palette.query, strlen(s_palette.query));
 
-	if(len > w - 4)
+	if(len > textw)
 	{
-		len = w - 4;
+		len = textw;
 	}
 
 	return x + 3 + len;
@@ -617,33 +635,234 @@ int palette_query_cursor_y(void)
 	int h;
 
 	palette_box(&x, &y, &w, &h, 0);
-	return y + 1;
+	return y + 2;
 }
 
-static void palette_draw_entry(int row, int col, int content, const PaletteItem *item)
+/* One horizontal input-box border row (top or bottom corners). */
+static void palette_draw_input_border(int row, int x, int w, int left, int right)
 {
-	char text[128];
-	int len;
+	int ix;
+	int iex;
+	int i;
+	int box;
 
-	if(item == NULL)
+	if(w < 8)
 	{
 		return;
 	}
 
-	if(content < 1)
+	ix = x + 2;
+	iex = x + w - 3;
+	box = highlight_palette_attr(HL_PAL_BOX);
+	mvaddch(row, x, ACS_VLINE);
+
+	for(i = x + 1; i < ix; i++)
+	{
+		mvaddch(row, i, ' ');
+	}
+
+	attron(box);
+	mvaddch(row, ix, left);
+
+	for(i = ix + 1; i < iex; i++)
+	{
+		mvaddch(row, i, ACS_HLINE);
+	}
+
+	mvaddch(row, iex, right);
+	attroff(box);
+
+	for(i = iex + 1; i < x + w - 1; i++)
+	{
+		mvaddch(row, i, ' ');
+	}
+
+	mvaddch(row, x + w - 1, ACS_VLINE);
+}
+
+static void palette_draw_input(int top, int x, int w)
+{
+	int ix;
+	int iex;
+	int i;
+	int qlen;
+	int textw;
+	int box;
+
+	if(w < 8)
 	{
 		return;
 	}
 
-	len = snprintf(text, sizeof(text), "%s - %s", item->cmd, item->name);
+	ix = x + 2;
+	iex = x + w - 3;
+	textw = iex - ix - 1;
+	box = highlight_palette_attr(HL_PAL_BOX);
+	palette_draw_input_border(top, x, w, ACS_ULCORNER, ACS_URCORNER);
+	mvaddch(top + 1, x, ACS_VLINE);
 
-	if(len < 0)
+	for(i = x + 1; i < ix; i++)
+	{
+		mvaddch(top + 1, i, ' ');
+	}
+
+	attron(box);
+	mvaddch(top + 1, ix, ACS_VLINE);
+	attroff(box);
+
+	for(i = ix + 1; i < iex; i++)
+	{
+		mvaddch(top + 1, i, ' ');
+	}
+
+	if(textw > 0)
+	{
+		qlen = (int)utf8_fit_cells(s_palette.query, strlen(s_palette.query), textw);
+		mvaddnstr(top + 1, ix + 1, s_palette.query, qlen);
+	}
+
+	attron(box);
+	mvaddch(top + 1, iex, ACS_VLINE);
+	attroff(box);
+
+	for(i = iex + 1; i < x + w - 1; i++)
+	{
+		mvaddch(top + 1, i, ' ');
+	}
+
+	mvaddch(top + 1, x + w - 1, ACS_VLINE);
+	palette_draw_input_border(top + 2, x, w, ACS_LLCORNER, ACS_LRCORNER);
+}
+
+/* One entry row: "Group: Name" left, live keybinding badge right,
+scrollbar thumb in the reserved column on overflow. */
+static void palette_draw_row(int row, int x, int w, int idx, int visible)
+{
+	const PaletteItem *item;
+	int selected;
+	int sel;
+	int badge_attr;
+	int sb;
+	int tw;
+	int i;
+	char label[128];
+	char badge[16];
+	int blen;
+	int avail;
+	int llen;
+
+	sb = x + w - 3;
+	tw = w - 5;
+	mvaddch(row, x, ACS_VLINE);
+	mvaddch(row, x + w - 1, ACS_VLINE);
+
+	if(tw < 1)
 	{
 		return;
 	}
 
-	mvaddnstr(row, col, text,
-		(int)utf8_fit_cells(text, strlen(text), content));
+	if(s_palette.scroll + idx < s_palette.count)
+	{
+		item = &s_table[s_palette.filtered[s_palette.scroll + idx]];
+	}
+	else
+	{
+		item = NULL;
+	}
+
+	selected = (item != NULL && s_palette.scroll + idx == s_palette.selected);
+	sel = highlight_palette_attr(HL_PAL_SEL);
+
+	if(selected)
+	{
+		attron(sel);
+	}
+
+	for(i = x + 1; i < x + w - 1; i++)
+	{
+		mvaddch(row, i, ' ');
+	}
+
+	if(item != NULL)
+	{
+		snprintf(label, sizeof(label), "%s: %s", item->group, item->name);
+		badge[0] = '\0';
+
+		if(item->key != NULL)
+		{
+			config_key_label(item->key, badge, sizeof(badge));
+		}
+
+		blen = utf8_width_n(badge, strlen(badge));
+
+		if(blen > 0 && blen + 2 <= tw)
+		{
+			avail = tw - blen - 2;
+			llen = (int)utf8_fit_cells(label, strlen(label), avail);
+			mvaddnstr(row, x + 2, label, llen);
+
+			if(selected)
+			{
+				attroff(sel);
+			}
+
+			badge_attr = highlight_palette_attr(HL_PAL_BADGE);
+			attron(badge_attr);
+			mvaddnstr(row, x + w - 4 - blen, badge, (int)strlen(badge));
+			attroff(badge_attr);
+
+			if(selected)
+			{
+				attron(sel);
+			}
+		}
+		else
+		{
+			llen = (int)utf8_fit_cells(label, strlen(label), tw);
+			mvaddnstr(row, x + 2, label, llen);
+		}
+	}
+
+	if(selected)
+	{
+		attroff(sel);
+	}
+
+	if(s_palette.count > visible)
+	{
+		int th;
+		int ts;
+		int t;
+
+		th = (visible * visible) / s_palette.count;
+
+		if(th < 1)
+		{
+			th = 1;
+		}
+
+		if(th > visible)
+		{
+			th = visible;
+		}
+
+		ts = (s_palette.scroll * visible) / s_palette.count;
+
+		if(ts + th > visible)
+		{
+			ts = visible - th;
+		}
+
+		for(t = 0; t < th; t++)
+		{
+			if(ts + t == idx)
+			{
+				attron(A_DIM);
+				mvaddch(row, sb, ACS_CKBOARD);
+				attroff(A_DIM);
+			}
+		}
+	}
 }
 
 void palette_draw(void)
@@ -653,8 +872,6 @@ void palette_draw(void)
 	int y;
 	int w;
 	int h;
-	int content;
-	int qlen;
 	int i;
 
 	if(s_palette.active == 0)
@@ -662,85 +879,42 @@ void palette_draw(void)
 		return;
 	}
 
-	if(LINES < 5 || COLS < 10)
+	if(LINES < 7 || COLS < 10)
 	{
 		return;
 	}
 
 	visible = palette_visible_rows();
 	palette_box(&x, &y, &w, &h, visible);
-	content = w - 2;
 	mvaddch(y, x, ACS_ULCORNER);
 
-	for(i = 1; i <= content; i++)
+	for(i = 1; i <= w - 2; i++)
 	{
 		mvaddch(y, x + i, ACS_HLINE);
 	}
 
-	mvaddch(y, x + content + 1, ACS_URCORNER);
+	mvaddch(y, x + w - 1, ACS_URCORNER);
+	palette_draw_input(y + 1, x, w);
+	mvaddch(y + 4, x, ACS_LTEE);
 
-	if(content >= 19)
+	for(i = 1; i <= w - 2; i++)
 	{
-		attron(A_BOLD);
-		mvaddnstr(y, x + 1 + (content - 17) / 2, " Command Palette ", 17);
-		attroff(A_BOLD);
+		mvaddch(y + 4, x + i, ACS_HLINE);
 	}
 
-	mvaddch(y + 1, x, ACS_VLINE);
-
-	for(i = 0; i < content; i++)
-	{
-		mvaddch(y + 1, x + 1 + i, ' ');
-	}
-
-	mvaddch(y + 1, x + content + 1, ACS_VLINE);
-	mvaddnstr(y + 1, x + 1, "> ", content);
-	qlen = (int)utf8_fit_cells(s_palette.query, strlen(s_palette.query), content - 2);
-	mvaddnstr(y + 1, x + 3, s_palette.query, qlen);
+	mvaddch(y + 4, x + w - 1, ACS_RTEE);
 
 	for(i = 0; i < visible; i++)
 	{
-		int row;
-		int selected;
-		int j;
-
-		row = y + 2 + i;
-		mvaddch(row, x, ACS_VLINE);
-
-		for(j = 0; j < content; j++)
-		{
-			mvaddch(row, x + 1 + j, ' ');
-		}
-
-		mvaddch(row, x + content + 1, ACS_VLINE);
-
-		if(s_palette.scroll + i >= s_palette.count)
-		{
-			continue;
-		}
-
-		selected = (s_palette.scroll + i == s_palette.selected);
-
-		if(selected)
-		{
-			attron(A_REVERSE);
-		}
-
-		palette_draw_entry(row, x + 1, content,
-			&s_table[s_palette.filtered[s_palette.scroll + i]]);
-
-		if(selected)
-		{
-			attroff(A_REVERSE);
-		}
+		palette_draw_row(y + 5 + i, x, w, i, visible);
 	}
 
-	mvaddch(y + visible + 2, x, ACS_LLCORNER);
+	mvaddch(y + visible + 5, x, ACS_LLCORNER);
 
-	for(i = 1; i <= content; i++)
+	for(i = 1; i <= w - 2; i++)
 	{
-		mvaddch(y + visible + 2, x + i, ACS_HLINE);
+		mvaddch(y + visible + 5, x + i, ACS_HLINE);
 	}
 
-	mvaddch(y + visible + 2, x + content + 1, ACS_LRCORNER);
+	mvaddch(y + visible + 5, x + w - 1, ACS_LRCORNER);
 }

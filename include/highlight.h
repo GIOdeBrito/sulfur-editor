@@ -35,6 +35,13 @@ typedef struct
 	int dirty;
 } HlCache;
 
+typedef enum
+{
+	HL_PAL_BOX,
+	HL_PAL_SEL,
+	HL_PAL_BADGE
+} HlPaletteAttr;
+
 void highlight_set_filetype(Buffer *b);
 void highlight_mark_dirty(Buffer *b);
 void highlight_ensure(Buffer *b);
@@ -44,6 +51,10 @@ int highlight_use_color(void);
 int highlight_attr(HlClass cls);
 /* Separator tint for a git gutter marker. A_NORMAL when colors are off. */
 int highlight_git_attr(GitMarker marker);
+/* Accent attr for the command palette (input border, selected row,
+keybinding badge). A_REVERSE/A_BOLD/A_NORMAL fallbacks when colors
+are off or the theme is mono. */
+int highlight_palette_attr(HlPaletteAttr id);
 const unsigned char *highlight_classes(Buffer *b, size_t row);
 
 #endif
