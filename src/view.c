@@ -1016,7 +1016,7 @@ void editor_draw_status(void)
 		snprintf(left, sizeof(left), "%s%s", fname, dirty ? " *" : "");
 	}
 
-	snprintf(right, sizeof(right), "%s %s %zu:%zu/%zu  Ctrl-Q quit | F1 palette | F2 explorer", eol, editor_filetype_label(ft), cy + 1, col, num_lines);
+	snprintf(right, sizeof(right), "%s %s %zu:%zu/%zu", eol, editor_filetype_label(ft), cy + 1, col, num_lines);
 	attron(A_REVERSE);
 	move(status_row, 0);
 	clrtoeol();
