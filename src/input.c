@@ -333,7 +333,7 @@ int editor_handle_key(int key)
 
 	if(config_key_matches("next-tab", key))
 	{
-		if(tabs_next() != 0)
+		if(tabs_next() != 0 && tabs_switch_reloaded() == 0)
 		{
 			editor_set_status("Buffer switched");
 		}
@@ -343,7 +343,7 @@ int editor_handle_key(int key)
 
 	if(config_key_matches("prev-tab", key))
 	{
-		if(tabs_prev() != 0)
+		if(tabs_prev() != 0 && tabs_switch_reloaded() == 0)
 		{
 			editor_set_status("Buffer switched");
 		}
@@ -522,6 +522,39 @@ void editor_run(void)
 		if(b == NULL || v == NULL)
 		{
 			return;
+		}
+
+		/* Hot reload: the active buffer checks its disk baseline. One
+		stat per frame; the file is only read when the baseline moved,
+		and the baseline adopts each sighting so warnings fire once. */
+		{
+			int disk;
+
+			disk = buffer_poll_disk(b);
+
+			if(disk == DISK_RELOADED)
+			{
+				editor_select_clear(v);
+				complete_reset(b);
+				search_deactivate();
+				editor_clamp_cursor(b, v);
+				editor_set_status("File reloaded");
+			}
+			else if(disk == DISK_CHANGED_KEPT)
+			{
+				editor_set_status("File changed on disk (unsaved changes kept)");
+			}
+			else if(disk == DISK_DELETED)
+			{
+				if(b->dirty != 0)
+				{
+					editor_set_status("File deleted on disk (unsaved changes kept)");
+				}
+				else
+				{
+					editor_set_status("File deleted on disk");
+				}
+			}
 		}
 
 		/* Live git markers: dirty buffers diff unsaved content vs HEAD,

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-C11 ncurses editor. Single binary, no tests (`tests/` empty), no CI.
+C11 ncurses editor. Single binary, no tests, no CI.
 `TODO.md` is ideas-only — never implement from it. `Makefile` is truth, README is user docs.
 
 
@@ -26,6 +26,7 @@ C11 ncurses editor. Single binary, no tests (`tests/` empty), no CI.
 
 - Paths in order, first existing wins: `$XDG_CONFIG_HOME/sulf/config`, `~/.config/sulf/config`, legacy `~/.config/sulf`. Missing keeps defaults; bad lines ignored with status notice.
 - `tab_width` 1..16, default 4 — display-only, never converts bytes.
+- `theme` default|acid|mono|high-contrast (default acid); `color.<keyword|string|comment|number|preproc|text|background>` named/0-255/default/none; any `color.*` clears mono. Bad theme/color lines ignored with status notice.
 - `key.<action>` rebinds main keys (defaults in `config.c` mirror `input.c`). Printable chars rejected (typing never shadowed). Stealing another action's default rejected unless that action is also rebound (swaps work). Search/palette/explorer/completion modal keys stay fixed.
 
 ## Invariants agents break
@@ -51,5 +52,6 @@ C11 ncurses editor. Single binary, no tests (`tests/` empty), no CI.
 - Clipboard: static 8KB, no malloc. Copy needs non-empty selection; cut = copy + one `UNDO_OTHER` delete; paste replaces selection, splits/joins lines, lands cursor at end of insert, no-op on virtual rows. Truncation reports, never silent. Cut/paste deactivate search.
 - Mouse: click-to-move + wheel ±3 rows + map-column jump + tab-bar click; silent-off without terminal support. Never touches `sel_active` (no drag/release). Clicks clear selection, reset completion, deactivate search.
 - Map: always-visible right edge (3 cells + `ACS_VLINE`, 0 if no text col left). Tint = dominant highlight class + `A_REVERSE`; viewport wash + cursor-bucket underline.
+- Reload: clean buffers auto-reload on focus-in/tab-switch/every input frame via stat baseline (`disk_sec/nsec/size/have_stat`, stamped on open/save). Dirty buffers keep edits with a one-shot `File changed on disk` warning; touch/same-byte rewrites only re-stamp (undo survives); deleted files warn once (`have_stat` cleared). Poll lives in `buffer_poll_disk` (never in draw); only the active buffer reports status, background tabs refresh silently.
 - Page: `PgUp`/`PgDn` move exactly `LINES-3` rows; `row_off` follows via per-frame `editor_scroll()`, not inside the move.
 - Enter inherits the split line's leading spaces/tabs (capped at `cx`).

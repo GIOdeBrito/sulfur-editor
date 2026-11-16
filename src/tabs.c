@@ -15,6 +15,10 @@
 static Buffer s_buffers[MAX_BUFFERS];
 static int s_active;
 static View s_view;
+/* Set when the last tab switch noticed an external disk change, so the
+switch caller keeps the reload warning instead of overwriting it with
+"Buffer switched". Read-once via tabs_switch_reloaded(). */
+static int s_switch_reloaded;
 
 static int tabs_is_pristine(Buffer *b)
 {
@@ -44,12 +48,39 @@ static int tabs_is_pristine(Buffer *b)
 static void tabs_on_switch(void)
 {
 	Buffer *b;
+	int disk;
 
 	b = tabs_active();
 
 	if(b == NULL)
 	{
 		return;
+	}
+
+	disk = buffer_poll_disk(b);
+
+	if(disk == DISK_RELOADED)
+	{
+		s_switch_reloaded = 1;
+		editor_set_status("File reloaded");
+	}
+	else if(disk == DISK_CHANGED_KEPT)
+	{
+		s_switch_reloaded = 1;
+		editor_set_status("File changed on disk (unsaved changes kept)");
+	}
+	else if(disk == DISK_DELETED)
+	{
+		s_switch_reloaded = 1;
+
+		if(b->dirty != 0)
+		{
+			editor_set_status("File deleted on disk (unsaved changes kept)");
+		}
+		else
+		{
+			editor_set_status("File deleted on disk");
+		}
 	}
 
 	editor_select_clear(&s_view);
@@ -148,6 +179,18 @@ void tabs_activate(int i)
 
 	s_active = i;
 	tabs_on_switch();
+}
+
+/* Read-once flag for the input loop: non-zero when the last switch
+already reported a disk change, so "Buffer switched" must not
+overwrite that warning. */
+int tabs_switch_reloaded(void)
+{
+	int v;
+
+	v = s_switch_reloaded;
+	s_switch_reloaded = 0;
+	return v;
 }
 
 Buffer *tabs_active(void)

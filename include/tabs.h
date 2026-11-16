@@ -14,6 +14,10 @@ void tabs_activate(int i);
 Buffer *tabs_active(void);
 View *tabs_view(void);
 Buffer *tabs_get(int i);
+/* Read-once flag: non-zero when the last tab switch already reported an
+external disk change, so the caller must not overwrite that status with
+"Buffer switched". */
+int tabs_switch_reloaded(void);
 /* Open-or-switch: an existing tab with the same path is activated.
 Otherwise the file loads into the pristine current tab, or a fresh
 tab. Returns NULL when no slot is free or path is bad. */

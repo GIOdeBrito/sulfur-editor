@@ -80,7 +80,10 @@ line always show the default keys.
   xterm-compatible terminal for mouse and focus tracking.
 - Saves are atomic (write temp + rename), preserve file mode, and never
   truncate the original on failure. Losing terminal focus auto-saves every
-  named buffer with unsaved changes.
+  named buffer with unsaved changes. Files changed by another program
+  reload automatically when the buffer has no unsaved changes (checked on
+  focus, tab switch, and every frame); unsaved buffers keep their edits
+  with a warning, and deleted files report instead of reloading.
 - Undo keeps up to 64 full-buffer snapshots per buffer; typing runs coalesce so one
   `Ctrl-Z` reverts one typed stretch. Selection edits, indent, completion,
   and palette actions are all undoable.

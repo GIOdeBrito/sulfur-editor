@@ -1,6 +1,9 @@
 #ifndef EDITOR_H
 #define EDITOR_H
 
+#include <sys/stat.h>
+#include <sys/types.h>
+
 #include "common.h"
 #include "complete.h"
 #include "git.h"
@@ -34,6 +37,14 @@ struct Buffer
 	CompleteState complete;
 	GitState git;
 	int used;
+	/* Hot-reload baseline: last observed mtime/size of the file behind
+	filename. have_stat == 0 means untracked (unnamed, new, or deleted).
+	Refreshed on open/save, checked on focus-in, tab-switch and every
+	input frame; clean buffers auto-reload, dirty ones keep their edits. */
+	time_t disk_sec;
+	long disk_nsec;
+	off_t disk_size;
+	int have_stat;
 };
 
 /* Cursor, scroll and selection. Single global view for now (tabs

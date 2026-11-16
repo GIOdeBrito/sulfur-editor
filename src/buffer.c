@@ -139,57 +139,103 @@ static void editor_clear_lines(Buffer *b)
 	b->num_lines = 0;
 }
 
-void editor_open(Buffer *b, const char *filename)
+static void buffer_stamp(Buffer *b, const struct stat *st)
+{
+	if(b == NULL || st == NULL)
+	{
+		return;
+	}
+
+	b->disk_sec = st->st_mtime;
+	b->disk_nsec = (long)st->st_mtim.tv_nsec;
+	b->disk_size = st->st_size;
+	b->have_stat = 1;
+}
+
+static void buffer_stamp_file(Buffer *b)
+{
+	struct stat st;
+
+	if(b == NULL || b->filename[0] == '\0')
+	{
+		return;
+	}
+
+	if(stat(b->filename, &st) == 0)
+	{
+		buffer_stamp(b, &st);
+	}
+	else
+	{
+		b->have_stat = 0;
+	}
+}
+
+static int buffer_same_stat(Buffer *b, const struct stat *st)
+{
+	if(b == NULL || st == NULL || b->have_stat == 0)
+	{
+		return 0;
+	}
+
+	return b->disk_sec == st->st_mtime &&
+		b->disk_nsec == (long)st->st_mtim.tv_nsec &&
+		b->disk_size == st->st_size;
+}
+
+/* Shared file reader for open and hot reload. Loads stripped lines plus
+EOL/trailing-newline state into a fresh array (at least one line, so an
+empty file still yields a single empty line). Returns 0 on success. */
+static int buffer_load_lines(const char *filename, Line **lines_out, size_t *num_out,
+	size_t *cap_out, EolKind *eol_out, int *trailing_out)
 {
 	FILE *fp;
 	char *buf;
 	size_t cap;
 	ssize_t read_len;
+	Line *lines;
+	size_t num;
+	size_t line_cap;
 	size_t crlf_count;
 	size_t lf_count;
+	int trailing_nl;
 
-	if(b == NULL)
+	if(filename == NULL || lines_out == NULL || num_out == NULL ||
+		cap_out == NULL || eol_out == NULL || trailing_out == NULL)
 	{
-		return;
+		return -1;
 	}
 
-	editor_clear_lines(b);
-	b->filename[0] = '\0';
-	b->eol = EOL_LF;
-	b->trailing_nl = 0;
-	b->dirty = 0;
-
-	if(filename == NULL || filename[0] == '\0')
-	{
-		editor_append_line(b, "", 0);
-		highlight_set_filetype(b);
-		highlight_mark_dirty(b);
-		return;
-	}
-
-	snprintf(b->filename, sizeof(b->filename), "%s", filename);
-	highlight_set_filetype(b);
 	fp = fopen(filename, "r");
 
 	if(fp == NULL)
 	{
-		editor_append_line(b, "", 0);
-		highlight_mark_dirty(b);
-		editor_set_status("New file");
-		return;
+		return -1;
 	}
 
+	lines = malloc(sizeof(Line) * INITIAL_LINE_CAP);
+
+	if(lines == NULL)
+	{
+		fclose(fp);
+		die("malloc");
+	}
+
+	num = 0;
+	line_cap = INITIAL_LINE_CAP;
 	buf = NULL;
 	cap = 0;
-	read_len = 0;
 	crlf_count = 0;
 	lf_count = 0;
+	trailing_nl = 0;
 
 	while((read_len = getline(&buf, &cap, fp)) != -1)
 	{
 		size_t len;
 		int has_nl;
 		int has_cr;
+		Line *line;
+		Line *grown;
 
 		len = (size_t)read_len;
 		has_nl = 0;
@@ -214,40 +260,178 @@ void editor_open(Buffer *b, const char *filename)
 			lf_count++;
 		}
 
-		b->trailing_nl = has_nl;
+		trailing_nl = has_nl;
 
 		while(len > 0 && (buf[len - 1] == '\n' || buf[len - 1] == '\r'))
 		{
 			len--;
 		}
 
-		editor_append_line(b, buf, len);
+		if(num >= line_cap)
+		{
+			line_cap *= 2;
+			grown = realloc(lines, sizeof(Line) * line_cap);
+
+			if(grown == NULL)
+			{
+				size_t i;
+
+				for(i = 0; i < num; i++)
+				{
+					line_free(&lines[i]);
+				}
+
+				free(lines);
+				free(buf);
+				fclose(fp);
+				die("realloc");
+			}
+
+			lines = grown;
+		}
+
+		line = &lines[num];
+		line_init(line);
+		line_ensure_cap(line, len + 1);
+
+		if(len > 0)
+		{
+			memcpy(line->data, buf, len);
+		}
+
+		line->len = len;
+		line->data[len] = '\0';
+		num++;
 	}
 
 	free(buf);
 	fclose(fp);
 
+	if(num == 0)
+	{
+		line_init(&lines[0]);
+		line_ensure_cap(&lines[0], 1);
+		lines[0].len = 0;
+		lines[0].data[0] = '\0';
+		num = 1;
+	}
+
 	if(crlf_count > 0 && lf_count == 0)
 	{
-		b->eol = EOL_CRLF;
+		*eol_out = EOL_CRLF;
 	}
 	else if(crlf_count > 0 && lf_count > 0)
 	{
-		b->eol = EOL_MIXED;
+		*eol_out = EOL_MIXED;
 	}
 	else
 	{
-		b->eol = EOL_LF;
+		*eol_out = EOL_LF;
 	}
 
-	if(b->num_lines == 0)
+	*lines_out = lines;
+	*num_out = num;
+	*cap_out = line_cap;
+	*trailing_out = trailing_nl;
+	return 0;
+}
+
+static int buffer_lines_equal(Buffer *b, Line *lines, size_t num, int trailing_nl)
+{
+	size_t i;
+
+	if(b == NULL || lines == NULL)
+	{
+		return 0;
+	}
+
+	if(num != b->num_lines || trailing_nl != b->trailing_nl)
+	{
+		return 0;
+	}
+
+	for(i = 0; i < num; i++)
+	{
+		if(lines[i].len != b->lines[i].len)
+		{
+			return 0;
+		}
+
+		if(lines[i].len > 0 && memcmp(lines[i].data, b->lines[i].data, lines[i].len) != 0)
+		{
+			return 0;
+		}
+	}
+
+	return 1;
+}
+
+static void buffer_free_lines(Line *lines, size_t num)
+{
+	size_t i;
+
+	if(lines == NULL)
+	{
+		return;
+	}
+
+	for(i = 0; i < num; i++)
+	{
+		line_free(&lines[i]);
+	}
+
+	free(lines);
+}
+
+void editor_open(Buffer *b, const char *filename)
+{
+	Line *lines;
+	size_t num;
+	size_t cap;
+	EolKind eol;
+	int trailing_nl;
+
+	if(b == NULL)
+	{
+		return;
+	}
+
+	editor_clear_lines(b);
+	b->filename[0] = '\0';
+	b->eol = EOL_LF;
+	b->trailing_nl = 0;
+	b->dirty = 0;
+	b->have_stat = 0;
+
+	if(filename == NULL || filename[0] == '\0')
 	{
 		editor_append_line(b, "", 0);
+		highlight_set_filetype(b);
+		highlight_mark_dirty(b);
+		return;
 	}
 
+	snprintf(b->filename, sizeof(b->filename), "%s", filename);
+	highlight_set_filetype(b);
+
+	if(buffer_load_lines(b->filename, &lines, &num, &cap, &eol, &trailing_nl) != 0)
+	{
+		editor_append_line(b, "", 0);
+		highlight_mark_dirty(b);
+		editor_set_status("New file");
+		return;
+	}
+
+	free(b->lines);
+	b->lines = lines;
+	b->num_lines = num;
+	b->line_cap = cap;
+	b->eol = eol;
+	b->trailing_nl = trailing_nl;
 	highlight_mark_dirty(b);
 	git_reset(b);
 	git_refresh(b);
+	buffer_stamp_file(b);
 	editor_set_status("File loaded");
 }
 
@@ -400,6 +584,7 @@ int editor_save(Buffer *b)
 	b->dirty = 0;
 	git_invalidate();
 	git_refresh(b);
+	buffer_stamp_file(b);
 
 	if(b->eol == EOL_MIXED)
 	{
@@ -423,6 +608,7 @@ void editor_close_buffer(Buffer *b)
 	b->dirty = 0;
 	b->eol = EOL_LF;
 	b->trailing_nl = 0;
+	b->have_stat = 0;
 	b->filetype = HL_PLAIN;
 	highlight_free(b);
 	highlight_mark_dirty(b);
@@ -430,4 +616,82 @@ void editor_close_buffer(Buffer *b)
 	search_deactivate();
 	complete_reset(b);
 	git_reset(b);
+}
+
+int buffer_poll_disk(Buffer *b)
+{
+	struct stat st;
+	Line *lines;
+	size_t num;
+	size_t cap;
+	EolKind eol;
+	int trailing_nl;
+
+	if(b == NULL || b->filename[0] == '\0')
+	{
+		return DISK_OK;
+	}
+
+	if(stat(b->filename, &st) != 0)
+	{
+		if(b->have_stat == 0)
+		{
+			return DISK_OK;
+		}
+
+		b->have_stat = 0;
+
+		if(b->dirty != 0)
+		{
+			return DISK_CHANGED_KEPT;
+		}
+
+		return DISK_DELETED;
+	}
+
+	if(buffer_same_stat(b, &st))
+	{
+		return DISK_OK;
+	}
+
+	/* Disk moved under a dirty buffer: keep the user's edits, adopt the
+	new baseline so the warning fires once per external change. */
+	if(b->dirty != 0)
+	{
+		buffer_stamp(b, &st);
+		return DISK_CHANGED_KEPT;
+	}
+
+	/* Clean buffer: an untracked one (created after a "New file" open,
+	or re-created after a delete) loads below just like a stat change. */
+	if(buffer_load_lines(b->filename, &lines, &num, &cap, &eol, &trailing_nl) != 0)
+	{
+		buffer_stamp(b, &st);
+		return DISK_OK;
+	}
+
+	/* Same bytes (touch, same-content rewrite): re-stamp only so undo
+	history survives. */
+	if(buffer_lines_equal(b, lines, num, trailing_nl))
+	{
+		buffer_free_lines(lines, num);
+		buffer_stamp(b, &st);
+		return DISK_OK;
+	}
+
+	editor_clear_lines(b);
+	free(b->lines);
+	b->lines = lines;
+	b->num_lines = num;
+	b->line_cap = cap;
+	b->eol = eol;
+	b->trailing_nl = trailing_nl;
+	b->dirty = 0;
+	highlight_set_filetype(b);
+	highlight_mark_dirty(b);
+	undo_reset(b);
+	git_reset(b);
+	git_refresh(b);
+	buffer_stamp(b, &st);
+	return DISK_RELOADED;
 }
