@@ -1,8 +1,10 @@
 #include <dirent.h>
 #include <ncurses.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include "buffer.h"
 #include "common.h"
@@ -70,6 +72,95 @@ static struct
 	int nlines;
 	int truncated;
 } s_preview;
+
+static char s_startup_dir[FILENAME_LIMIT];
+static struct stat s_startup_st;
+static int s_have_startup;
+
+void explorer_capture_startup_dir(void)
+{
+	char cwd[FILENAME_LIMIT];
+	struct stat st;
+	size_t len;
+
+	if(s_have_startup != 0)
+	{
+		return;
+	}
+
+	if(getcwd(cwd, sizeof(cwd)) == NULL)
+	{
+		return;
+	}
+
+	if(stat(cwd, &st) != 0)
+	{
+		return;
+	}
+
+	snprintf(s_startup_dir, sizeof(s_startup_dir), "%s", cwd);
+	len = strlen(s_startup_dir);
+
+	while(len > 1 && s_startup_dir[len - 1] == '/')
+	{
+		s_startup_dir[len - 1] = '\0';
+		len--;
+	}
+
+	s_startup_st = st;
+	s_have_startup = 1;
+}
+
+static int explorer_at_startup_root(void)
+{
+	struct stat here;
+
+	if(s_have_startup == 0)
+	{
+		return 0;
+	}
+
+	if(stat(s_explorer.cwd, &here) != 0)
+	{
+		return 0;
+	}
+
+	return here.st_dev == s_startup_st.st_dev && here.st_ino == s_startup_st.st_ino;
+}
+
+static int explorer_path_within_startup(const char *path)
+{
+	size_t root_len;
+
+	if(s_have_startup == 0)
+	{
+		return 1;
+	}
+
+	if(path == NULL || path[0] == '\0')
+	{
+		return 0;
+	}
+
+	if(strcmp(path, s_startup_dir) == 0)
+	{
+		return 1;
+	}
+
+	root_len = strlen(s_startup_dir);
+
+	if(root_len == 1 && s_startup_dir[0] == '/')
+	{
+		return 1;
+	}
+
+	if(strncmp(path, s_startup_dir, root_len) == 0 && path[root_len] == '/')
+	{
+		return 1;
+	}
+
+	return 0;
+}
 
 static int explorer_lower(int c)
 {
@@ -1450,7 +1541,7 @@ static void explorer_rescan(void)
 	s_explorer.total = 0;
 	s_explorer.truncated = 0;
 
-	if(explorer_at_filesystem_root() == 0)
+	if(explorer_at_filesystem_root() == 0 && explorer_at_startup_root() == 0)
 	{
 		snprintf(s_explorer.names[0], sizeof(s_explorer.names[0]), "../");
 		snprintf(s_explorer.paths[0], sizeof(s_explorer.paths[0]), "%s", s_explorer.cwd);
@@ -1715,6 +1806,11 @@ static void explorer_parent(void)
 		return;
 	}
 
+	if(explorer_at_startup_root() != 0)
+	{
+		return;
+	}
+
 	if(strcmp(s_explorer.cwd, ".") == 0)
 	{
 		snprintf(s_explorer.cwd, sizeof(s_explorer.cwd), "..");
@@ -1829,6 +1925,12 @@ static void explorer_enter(void)
 			snprintf(target, sizeof(target), "/");
 		}
 
+		if(explorer_path_within_startup(target) == 0)
+		{
+			editor_set_status("At project root");
+			return;
+		}
+
 		snprintf(s_explorer.cwd, sizeof(s_explorer.cwd), "%s", target);
 		s_explorer.query[0] = '\0';
 		explorer_rescan();
@@ -1898,11 +2000,9 @@ static void explorer_move(int delta)
 
 void explorer_open(const char *start_dir)
 {
-	const char *dir;
-	size_t len;
-	size_t i;
 	Buffer *b;
 
+	(void)start_dir;
 	b = tabs_active();
 
 	if(b != NULL)
@@ -1922,63 +2022,13 @@ void explorer_open(const char *start_dir)
 	s_search_stack_top = 0;
 	explorer_preview_invalidate();
 
-	dir = start_dir;
-
-	if(dir == NULL || dir[0] == '\0')
+	if(s_have_startup != 0)
 	{
-		dir = ".";
+		snprintf(s_explorer.cwd, sizeof(s_explorer.cwd), "%s", s_startup_dir);
 	}
-
-	snprintf(s_explorer.cwd, sizeof(s_explorer.cwd), "%s", dir);
-	len = strlen(s_explorer.cwd);
-
-	while(len > 1 && s_explorer.cwd[len - 1] == '/')
+	else
 	{
-		s_explorer.cwd[len - 1] = '\0';
-		len--;
-	}
-
-	for(i = len; i > 0; i--)
-	{
-		if(s_explorer.cwd[i - 1] == '/')
-		{
-			break;
-		}
-	}
-
-	if(i == 0)
-	{
-		struct stat st;
-
-		if(lstat(s_explorer.cwd, &st) != 0 || S_ISDIR(st.st_mode) == 0)
-		{
-			snprintf(s_explorer.cwd, sizeof(s_explorer.cwd), ".");
-		}
-	}
-	else if(s_explorer.cwd[len - 1] != '/')
-	{
-		int is_dir;
-		struct stat st;
-
-		is_dir = 0;
-
-		if(lstat(s_explorer.cwd, &st) == 0 && S_ISDIR(st.st_mode) == 0)
-		{
-			is_dir = 0;
-		}
-		else if(lstat(s_explorer.cwd, &st) == 0)
-		{
-			is_dir = 1;
-		}
-
-		if(is_dir == 0 && i > 1)
-		{
-			s_explorer.cwd[i - 1] = '\0';
-		}
-		else if(is_dir == 0 && i <= 1)
-		{
-			snprintf(s_explorer.cwd, sizeof(s_explorer.cwd), ".");
-		}
+		snprintf(s_explorer.cwd, sizeof(s_explorer.cwd), ".");
 	}
 
 	explorer_rescan();

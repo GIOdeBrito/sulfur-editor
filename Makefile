@@ -14,7 +14,7 @@ $(BLD)/sulf: $(OBJS)
 $(BLD)/%.o: $(SRC)/%.c | $(BLD)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BLD)/main.o: $(SRC)/main.c $(INC)/common.h $(INC)/config.h $(INC)/editor.h $(INC)/git.h $(INC)/buffer.h $(INC)/input.h $(INC)/screen.h $(INC)/complete.h $(INC)/highlight.h $(INC)/line.h $(INC)/search.h $(INC)/tabs.h $(INC)/undo.h
+$(BLD)/main.o: $(SRC)/main.c $(INC)/common.h $(INC)/config.h $(INC)/editor.h $(INC)/explorer.h $(INC)/git.h $(INC)/buffer.h $(INC)/input.h $(INC)/screen.h $(INC)/complete.h $(INC)/highlight.h $(INC)/line.h $(INC)/search.h $(INC)/tabs.h $(INC)/undo.h
 $(BLD)/line.o: $(SRC)/line.c $(INC)/common.h $(INC)/config.h $(INC)/line.h $(INC)/util.h
 $(BLD)/util.o: $(SRC)/util.c $(INC)/util.h $(INC)/screen.h
 $(BLD)/editor.o: $(SRC)/editor.c $(INC)/clipboard.h $(INC)/common.h $(INC)/complete.h $(INC)/editor.h $(INC)/git.h $(INC)/highlight.h $(INC)/line.h $(INC)/search.h $(INC)/undo.h $(INC)/util.h $(INC)/view.h

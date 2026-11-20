@@ -3,11 +3,6 @@
 C11 ncurses editor. Single binary, no tests, no CI.
 `TODO.md` is ideas-only — never implement from it. `Makefile` is truth, README is user docs.
 
-
-
-
-
-
 ## Build
 
 - `make` → `build/sulf` (zero warnings: `-Wall -Wextra -std=c11 -D_POSIX_C_SOURCE=200809L`). `make clean` wipes `build/` (gitignored, never commit).
@@ -48,7 +43,7 @@ C11 ncurses editor. Single binary, no tests, no CI.
 - Search: `Ctrl-F` sticky, `strstr`, case-sensitive, 512 matches/buffer; `n`/`Enter` next, `N` prev, `Esc` cancels. Edits/clicks/completion-accept deactivate (query kept); nav/wheel/resize preserve.
 - Select: end-exclusive, anchor `sel_ax`/`ay` + active `cx`/`cy`. Only plain moves, mouse clicks, completion-accept clear. Typing/`Enter`/Backspace/Del replace/delete range; `Tab` block-indents.
 - Palette: `Ctrl-P`/`F1`, subsequence filter on `/cmd` + name (rows show `Group: Name`, `/cmd` hidden alias), fixed 20-entry table, 70-col modal with input box + live `key.*` badges + scrollbar; `Enter` snapshots id then resets before sub-prompts; Quit propagates `editor_request_quit()`. Open/run clears completion, deactivates search.
-- Explorer: exclusive fullscreen view (never overlays editor). `F2` toggles at file's dir (`.` if unnamed), `F2`/`Esc` closes. Filter deep-searches subfolders (name-or-path fuzzy), showing hits with ancestor tree paths (tree art preserved, `../` excluded); `Right` expands in tree mode else cds/opens, `Left` collapses in tree mode else no-op, `Enter` cds/opens via `tabs_open_file`, `Backspace` edits query. No `../` row at filesystem root under any spelling (`.`/`..` chains included — detect via `stat` identity, never bare `strcmp(cwd, "/")`). Dotfiles always shown, no hidden toggle.
+- Explorer: exclusive fullscreen view (never overlays editor). `F2` toggles at launch folder (startup cwd, jailed: no `../` above it), `F2`/`Esc` closes. Filter deep-searches subfolders (name-or-path fuzzy), showing hits with ancestor tree paths (tree art preserved, `../` excluded); `Right` expands in tree mode else cds/opens, `Left` collapses in tree mode else no-op, `Enter` cds/opens via `tabs_open_file` (cds blocked outside root), `Backspace` edits query (parent move blocked at root). No `../` row at filesystem root under any spelling (`.`/`..` chains included — detect via `stat` identity, never bare `strcmp(cwd, "/")`). Dotfiles always shown, no hidden toggle.
 - Clipboard: static 8KB, no malloc. Copy needs non-empty selection; cut = copy + one `UNDO_OTHER` delete; paste replaces selection, splits/joins lines, lands cursor at end of insert, no-op on virtual rows. Truncation reports, never silent. Cut/paste deactivate search.
 - Mouse: click-to-move + wheel ±3 rows + map-column jump + tab-bar click; silent-off without terminal support. Never touches `sel_active` (no drag/release). Clicks clear selection, reset completion, deactivate search.
 - Map: always-visible right edge (3 cells + `ACS_VLINE`, 0 if no text col left). Tint = dominant highlight class + `A_REVERSE`; viewport wash + cursor-bucket underline.

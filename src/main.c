@@ -7,6 +7,7 @@
 #include "common.h"
 #include "config.h"
 #include "editor.h"
+#include "explorer.h"
 #include "input.h"
 #include "screen.h"
 #include "tabs.h"
@@ -81,6 +82,7 @@ int main(int argc, char *argv[])
 
 	opened = 0;
 	first_tab = -1;
+	explorer_capture_startup_dir();
 	tabs_init();
 	config_load();
 

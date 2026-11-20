@@ -2,6 +2,7 @@
 #define EXPLORER_H
 
 void explorer_open(const char *start_dir);
+void explorer_capture_startup_dir(void);
 void explorer_reset(void);
 int explorer_is_active(void);
 int explorer_handle_key(int key);
