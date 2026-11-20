@@ -198,6 +198,75 @@ static int explorer_fuzzy_match(const char *query, const char *name)
 	return 1;
 }
 
+static int explorer_glob_match(const char *pattern, const char *text)
+{
+	const char *star;
+	const char *ss;
+
+	if(pattern == NULL || text == NULL)
+	{
+		return 0;
+	}
+
+	star = NULL;
+	ss = text;
+
+	while(*text != '\0')
+	{
+		if(*pattern == '*')
+		{
+			star = pattern;
+			ss = text;
+			pattern++;
+			continue;
+		}
+
+		if(*pattern != '\0' && explorer_lower((unsigned char)*pattern) == explorer_lower((unsigned char)*text))
+		{
+			pattern++;
+			text++;
+			continue;
+		}
+
+		if(star != NULL)
+		{
+			pattern = star + 1;
+			ss++;
+			text = ss;
+			continue;
+		}
+
+		return 0;
+	}
+
+	while(*pattern == '*')
+	{
+		pattern++;
+	}
+
+	return *pattern == '\0';
+}
+
+static int explorer_match_query(const char *query, const char *text)
+{
+	if(query == NULL || text == NULL)
+	{
+		return 0;
+	}
+
+	if(query[0] == '\0')
+	{
+		return 1;
+	}
+
+	if(strchr(query, '*') != NULL)
+	{
+		return explorer_glob_match(query, text);
+	}
+
+	return explorer_fuzzy_match(query, text);
+}
+
 static int explorer_in_search(void)
 {
 	return s_explorer.query[0] != '\0';
@@ -330,12 +399,12 @@ static int explorer_search_matches(const char *name, const char *path)
 		return 0;
 	}
 
-	if(explorer_fuzzy_match(s_explorer.query, name) != 0)
+	if(explorer_match_query(s_explorer.query, name) != 0)
 	{
 		return 1;
 	}
 
-	if(explorer_fuzzy_match(s_explorer.query, path) != 0)
+	if(explorer_match_query(s_explorer.query, path) != 0)
 	{
 		return 1;
 	}
@@ -1462,7 +1531,7 @@ static void explorer_refilter(void)
 			break;
 		}
 
-		if(explorer_fuzzy_match(s_explorer.query, s_explorer.names[i]) == 0)
+		if(explorer_match_query(s_explorer.query, s_explorer.names[i]) == 0)
 		{
 			continue;
 		}
