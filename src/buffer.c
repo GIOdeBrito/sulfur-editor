@@ -1,3 +1,5 @@
+#include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -500,13 +502,81 @@ static int editor_write_all(Buffer *b, FILE *fp)
 	return 0;
 }
 
+static void buffer_save_error(const char *stage, int err)
+{
+	char msg[STATUS_LIMIT];
+
+	if(stage == NULL)
+	{
+		return;
+	}
+
+	if(err != 0)
+	{
+		snprintf(msg, sizeof(msg), "Cannot save: %s: %s", stage, strerror(err));
+	}
+	else
+	{
+		snprintf(msg, sizeof(msg), "Cannot save: %s", stage);
+	}
+
+	editor_set_status(msg);
+}
+
+static void buffer_fsync_dir(const char *filename)
+{
+	char dir[FILENAME_LIMIT];
+	const char *slash;
+	size_t len;
+	int dfd;
+
+	if(filename == NULL || filename[0] == '\0')
+	{
+		return;
+	}
+
+	slash = strrchr(filename, '/');
+
+	if(slash == NULL)
+	{
+		snprintf(dir, sizeof(dir), ".");
+	}
+	else if(slash == filename)
+	{
+		snprintf(dir, sizeof(dir), "/");
+	}
+	else
+	{
+		len = (size_t)(slash - filename);
+
+		if(len >= sizeof(dir))
+		{
+			return;
+		}
+
+		memcpy(dir, filename, len);
+		dir[len] = '\0';
+	}
+
+	dfd = open(dir, O_RDONLY);
+
+	if(dfd < 0)
+	{
+		return;
+	}
+
+	fsync(dfd);
+	close(dfd);
+}
+
 int editor_save(Buffer *b)
 {
 	FILE *fp;
-	char tmp[FILENAME_LIMIT + 16];
+	char tmp[FILENAME_LIMIT + 32];
 	struct stat st;
 	int have_mode;
 	int fd;
+	int save_err;
 
 	if(b == NULL)
 	{
@@ -518,42 +588,56 @@ int editor_save(Buffer *b)
 		return -1;
 	}
 
-	if(snprintf(tmp, sizeof(tmp), "%s.sulf.tmp", b->filename) >= (int)sizeof(tmp))
+	have_mode = 0;
+
+	if(stat(b->filename, &st) == 0)
+	{
+		if(S_ISDIR(st.st_mode))
+		{
+			editor_set_status("Cannot save: is a directory");
+			return -1;
+		}
+
+		have_mode = 1;
+	}
+
+	if(snprintf(tmp, sizeof(tmp), "%s.sulf.XXXXXX", b->filename) >= (int)sizeof(tmp))
 	{
 		editor_set_status("Cannot save: filename too long");
 		return -1;
 	}
 
-	have_mode = 0;
+	fd = mkstemp(tmp);
 
-	if(stat(b->filename, &st) == 0)
+	if(fd < 0)
 	{
-		have_mode = 1;
-	}
-
-	fp = fopen(tmp, "w");
-
-	if(fp == NULL)
-	{
-		editor_set_status("Cannot save: fopen failed");
+		save_err = errno;
+		buffer_save_error("tmp failed", save_err);
 		return -1;
 	}
 
 	if(have_mode != 0)
 	{
-		fd = fileno(fp);
+		fchmod(fd, st.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO));
+	}
 
-		if(fd >= 0)
-		{
-			fchmod(fd, st.st_mode & (S_IRWXU | S_IRWXG | S_IRWXO));
-		}
+	fp = fdopen(fd, "w");
+
+	if(fp == NULL)
+	{
+		save_err = errno;
+		close(fd);
+		unlink(tmp);
+		buffer_save_error("open failed", save_err);
+		return -1;
 	}
 
 	if(editor_write_all(b, fp) != 0)
 	{
+		save_err = errno;
 		fclose(fp);
-		remove(tmp);
-		editor_set_status("Cannot save: write failed");
+		unlink(tmp);
+		buffer_save_error("write failed", save_err);
 		return -1;
 	}
 
@@ -561,25 +645,30 @@ int editor_save(Buffer *b)
 
 	if(fd < 0 || fsync(fd) != 0)
 	{
+		save_err = errno;
 		fclose(fp);
-		remove(tmp);
-		editor_set_status("Cannot save: write failed");
+		unlink(tmp);
+		buffer_save_error("write failed", save_err);
 		return -1;
 	}
 
 	if(fclose(fp) != 0)
 	{
-		remove(tmp);
-		editor_set_status("Cannot save: rename failed");
+		save_err = errno;
+		unlink(tmp);
+		buffer_save_error("close failed", save_err);
 		return -1;
 	}
 
 	if(rename(tmp, b->filename) != 0)
 	{
-		remove(tmp);
-		editor_set_status("Cannot save: rename failed");
+		save_err = errno;
+		unlink(tmp);
+		buffer_save_error("rename failed", save_err);
 		return -1;
 	}
+
+	buffer_fsync_dir(b->filename);
 
 	b->dirty = 0;
 	git_invalidate();
