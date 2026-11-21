@@ -38,7 +38,7 @@ static void print_help(const char *prog)
 	printf("  F2                                  File explorer, Esc cancels\n");
 	printf("  Ctrl-Z / Ctrl-Y                     Undo / redo\n");
   printf("  Ctrl-Space                          Force completion (Tab / Enter accept)\n");
-  printf("  Mouse click / wheel                 Move cursor / scroll / switch tab\n");
+  printf("  Mouse click / drag / wheel          Move cursor / select text / scroll\n");
   printf("\n");
   printf("Config: $XDG_CONFIG_HOME/sulf/config, else ~/.config/sulf/config\n");
   printf("  (legacy ~/.config/sulf also works). Keys are tab_width, theme,\n");

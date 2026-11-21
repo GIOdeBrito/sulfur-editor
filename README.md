@@ -31,7 +31,7 @@ Unknown `-opt` flags are rejected. `--help` lists keys, `--version` prints the v
 | `F2` | File explorer (`Right` expand, `Enter` open, `Left` collapse, `Esc` closes, `*` wildcard in filter) |
 | `Ctrl-Z` / `Ctrl-Y` | Undo / redo (per buffer) |
 | `Ctrl-Space` | Force completion (`Tab` / `Enter` accept) |
-| Mouse click / wheel | Move cursor / scroll / switch tab (click the minimap to jump) |
+| Mouse click / drag / wheel | Move cursor / select text / scroll / switch tab (click the minimap to jump) |
 
 Closing a tab refuses dirty buffers. Closing the last tab resets to a fresh unnamed buffer.
 

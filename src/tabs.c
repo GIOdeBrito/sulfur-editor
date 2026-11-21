@@ -7,6 +7,7 @@
 #include "complete.h"
 #include "editor.h"
 #include "git.h"
+#include "mouse.h"
 #include "search.h"
 #include "tabs.h"
 #include "undo.h"
@@ -84,6 +85,7 @@ static void tabs_on_switch(void)
 	}
 
 	editor_select_clear(&s_view);
+	mouse_cancel_drag();
 	complete_reset(b);
 	search_deactivate();
 

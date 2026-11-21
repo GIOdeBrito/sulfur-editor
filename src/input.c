@@ -188,6 +188,7 @@ int editor_handle_key(int key)
 	{
 		if(key == KEY_MOUSE)
 		{
+			mouse_cancel_drag();
 			palette_reset();
 		}
 		else if(key == KEY_RESIZE)
@@ -211,6 +212,7 @@ int editor_handle_key(int key)
 
 		if(key == KEY_MOUSE)
 		{
+			mouse_cancel_drag();
 			explorer_reset();
 		}
 		else if(key == KEY_RESIZE)
@@ -229,6 +231,11 @@ int editor_handle_key(int key)
 	if(b == NULL || v == NULL)
 	{
 		return 0;
+	}
+
+	if(key != KEY_MOUSE)
+	{
+		mouse_cancel_drag();
 	}
 
 	if(search_is_active())
