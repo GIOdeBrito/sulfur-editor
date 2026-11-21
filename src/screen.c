@@ -57,6 +57,7 @@ void editor_start_screen(void)
 
 void editor_end_screen(void)
 {
+	mouse_shutdown();
 	focus_shutdown();
 	endwin();
 }

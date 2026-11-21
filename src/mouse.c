@@ -1,4 +1,5 @@
 #include <ncurses.h>
+#include <stdio.h>
 
 #include "common.h"
 #include "complete.h"
@@ -12,6 +13,8 @@
 
 static int s_enabled;
 static int s_dragging;
+static int s_motion;
+static int s_manual;
 static size_t s_ax;
 static size_t s_ay;
 
@@ -21,17 +24,39 @@ void mouse_init(void)
 
 	s_enabled = 0;
 	s_dragging = 0;
+	s_motion = 0;
+	s_manual = 0;
 	s_ax = 0;
 	s_ay = 0;
-	result = mousemask((mmask_t)(BUTTON1_PRESSED | BUTTON1_RELEASED | BUTTON1_CLICKED | BUTTON1_DOUBLE_CLICKED | BUTTON4_PRESSED | BUTTON5_PRESSED | REPORT_MOUSE_POSITION), NULL);
+	result = mousemask((mmask_t)(ALL_MOUSE_EVENTS | REPORT_MOUSE_POSITION), NULL);
 
 	if(result == 0)
 	{
 		return;
 	}
 
+	if((result & REPORT_MOUSE_POSITION) != 0)
+	{
+		s_motion = 1;
+	}
+
 	mouseinterval(0);
 	s_enabled = 1;
+	fputs("\033[?1002h\033[?1006h", stdout);
+	fflush(stdout);
+	s_manual = 1;
+}
+
+void mouse_shutdown(void)
+{
+	if(s_manual != 0)
+	{
+		fputs("\033[?1006l\033[?1002l", stdout);
+		fflush(stdout);
+		s_manual = 0;
+	}
+
+	s_dragging = 0;
 }
 
 void mouse_cancel_drag(void)
@@ -432,63 +457,83 @@ static int mouse_click(Buffer *b, View *v, MEVENT *ev)
 int mouse_handle(Buffer *b, View *v)
 {
 	MEVENT ev;
+	int handled;
 
 	if(s_enabled == 0)
 	{
 		return 0;
 	}
 
-	if(getmouse(&ev) != OK)
-	{
-		return 1;
-	}
+	handled = 0;
 
-	if((ev.bstate & BUTTON4_PRESSED) != 0)
+	while(getmouse(&ev) == OK)
 	{
-		mouse_scroll(b, v, -1);
-		return 1;
-	}
-
-	if((ev.bstate & BUTTON5_PRESSED) != 0)
-	{
-		mouse_scroll(b, v, 1);
-		return 1;
-	}
-
-	if((ev.bstate & REPORT_MOUSE_POSITION) != 0)
-	{
-		if(s_dragging != 0 && (ev.bstate & BUTTON1_PRESSED) != 0)
+		if((ev.bstate & BUTTON4_PRESSED) != 0)
 		{
-			return mouse_motion(b, v, &ev);
+			mouse_scroll(b, v, -1);
+			handled = 1;
+			continue;
 		}
 
-		return 0;
-	}
-
-	if((ev.bstate & BUTTON1_RELEASED) != 0)
-	{
-		return mouse_release(b, v, &ev);
-	}
-
-	if((ev.bstate & BUTTON1_PRESSED) != 0)
-	{
-		if(s_dragging != 0)
+		if((ev.bstate & BUTTON5_PRESSED) != 0)
 		{
-			return mouse_motion(b, v, &ev);
+			mouse_scroll(b, v, 1);
+			handled = 1;
+			continue;
 		}
 
-		return mouse_press(b, v, &ev);
+		if((ev.bstate & REPORT_MOUSE_POSITION) != 0)
+		{
+			if(s_dragging != 0 && s_motion != 0)
+			{
+				mouse_motion(b, v, &ev);
+				handled = 1;
+			}
+
+			continue;
+		}
+
+		if((ev.bstate & BUTTON1_RELEASED) != 0)
+		{
+			mouse_release(b, v, &ev);
+			handled = 1;
+			continue;
+		}
+
+		if((ev.bstate & BUTTON1_PRESSED) != 0)
+		{
+			if(s_dragging != 0)
+			{
+				mouse_motion(b, v, &ev);
+			}
+			else
+			{
+				mouse_press(b, v, &ev);
+			}
+
+			handled = 1;
+			continue;
+		}
+
+		if((ev.bstate & BUTTON1_CLICKED) != 0)
+		{
+			mouse_click(b, v, &ev);
+			handled = 1;
+			continue;
+		}
+
+		if((ev.bstate & BUTTON1_DOUBLE_CLICKED) != 0)
+		{
+			mouse_click(b, v, &ev);
+			handled = 1;
+			continue;
+		}
 	}
 
-	if((ev.bstate & BUTTON1_CLICKED) != 0)
+	if(handled != 0)
 	{
-		return mouse_click(b, v, &ev);
+		return 1;
 	}
 
-	if((ev.bstate & BUTTON1_DOUBLE_CLICKED) != 0)
-	{
-		return mouse_click(b, v, &ev);
-	}
-
-	return 0;
+	return 1;
 }
